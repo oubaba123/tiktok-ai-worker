@@ -1,0 +1,5 @@
+streamlit
+yt-dlp
+faster-whisper
+deep-translator
+moviepy==1.0.3
