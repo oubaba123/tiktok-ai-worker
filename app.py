@@ -40,7 +40,49 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= 模型缓存 =================
+# ================= 👥 独立账号权限白名单管理 =================
+# 🌟 【重点修改区】在这里自由管理你的人员名单，左边是账号，右边是密码。
+# 小白用户登录时必须完全匹配。注意：账号建议使用小写拼音或英文。
+USER_WHITE_LIST = {
+    "george": "666888",      # 你的管理员账号
+    "laowang": "888888",     # 合作方老王
+    "xiaozhang": "abc123"    # 员工小张
+}
+
+# 初始化登录状态
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.current_user = ""
+
+# --- 🔐 拦截门禁系统 ---
+if not st.session_state.authenticated:
+    # 居中展示一个干净的登录卡片
+    _, login_col, _ = st.columns([1, 1.5, 1])
+    with login_col:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.subheader("🔒 视频智能字幕工作台 · 内部登录")
+        st.caption("本系统属于私有资产，仅供受邀内部人员使用。")
+        st.markdown("---")
+        
+        # 账号密码输入框
+        input_user = st.text_input("👤 用户名账号：", placeholder="请输入您的专属账号（拼音/英文）")
+        input_pwd = st.text_input("🔑 登录密码：", type="password", placeholder="请输入您的密码")
+        
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("安全登录 ➔", type="primary", use_container_width=True):
+            # 校验账号是否存在，以及密码是否完全吻合
+            if input_user in USER_WHITE_LIST and input_pwd == USER_WHITE_LIST[input_user]:
+                st.session_state.authenticated = True
+                st.session_state.current_user = input_user
+                st.success(f"🎉 登录成功！欢迎回来，{input_user}。")
+                st.rerun()
+            else:
+                st.error("❌ 账号或密码不正确，请重新输入或联系乔治！")
+                
+    st.stop() # 🛑 强行拦截：只要没登录成功，后面的业务代码连一像素都不会渲染，绝对安全！
+
+
+# ================= 📦 模型缓存 =================
 @st.cache_resource
 def load_whisper_model():
     return WhisperModel("tiny", device="cpu", compute_type="int8")
@@ -49,7 +91,7 @@ def load_whisper_model():
 def safe_filename(name):
     return re.sub(r'[\\/*?:"<>|]', "", name).replace(" ", "_")
 
-# 全盘自动大扫除函数（只清理打上 temp_ 前缀的临时生成资产）
+# 全盘自动大扫除函数
 def auto_cleanup_old_files(current_video_path=""):
     all_temp_files = glob.glob("temp_*.mp4") + glob.glob("temp_*.mp3")
     current_audio_path = current_video_path.replace(".mp4", ".mp3") if current_video_path else ""
@@ -58,7 +100,7 @@ def auto_cleanup_old_files(current_video_path=""):
             try: os.remove(file)
             except: pass
 
-# ================= 纯 Python 极速音频分离函数 =================
+# 纯 Python 极速音频分离函数
 def extract_audio_pure_python(video_path, output_audio_path):
     try:
         from moviepy.editor import VideoFileClip
@@ -77,7 +119,7 @@ def extract_audio_pure_python(video_path, output_audio_path):
         print(f"音频分离失败: {str(e)}")
         return False
 
-# ================= 防断流多线程自适应链接下载函数 =================
+# 防断流多线程自适应链接下载函数
 def download_tk_video(video_url, status_text):
     status_text.text("正在智能解析本地网络代理环境...")
     
@@ -97,7 +139,6 @@ def download_tk_video(video_url, status_text):
         title = info_dict.get('title', 'video_title')[:20]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    # 加 temp_ 前缀，方便后续自动扫描和擦除
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{title}")
     
     ydl_opts = {
@@ -125,10 +166,9 @@ def format_short_time(seconds):
     parts = str(td).split(".")[0].split(":")
     return f"{parts[1]}:{parts[2]}"
 
-# ================= 🌟 统一识别核心函数 =================
 def transcribe_only_en(file_path, status_text):
     model = load_whisper_model()
-    status_text.text("AI 正在高精提取语音数据（支持音视频直接透传）...")
+    status_text.text("AI 正在高精提取语音数据...")
     segments, _ = model.transcribe(file_path, beam_size=5)
     
     results = []
@@ -150,10 +190,15 @@ if "processed" not in st.session_state:
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
 
-# ================= 界面渲染 =================
-st.title("🎬 TikTok AI 视频字幕工作台")
+# ================= 主业务界面渲染 =================
+# 在侧边栏右上角贴心地加上一个【退出登录】按钮，方便切换账号
+st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
+if st.sidebar.button("🚪 退出当前登录"):
+    st.session_state.authenticated = False
+    st.session_state.current_user = ""
+    st.session_state.processed = False
+    st.rerun()
 
-# 侧边栏状态检测
 st.sidebar.header("🔧 系统状态")
 if os.path.exists("cookies.txt"):
     st.sidebar.success("✅ cookies.txt 已就绪")
@@ -164,11 +209,9 @@ else:
 if not st.session_state.processed:
     auto_cleanup_old_files()
     
-    # 🌟 核心改动：顶置导航模式单选选项
     st.session_state.mode = st.radio("🔮 请选择识别模式：", ["🌐 链接解析", "📤 本地上传"], horizontal=True)
     st.markdown("---")
     
-    # 模式一：链接解析
     if st.session_state.mode == "🌐 链接解析":
         url_input = st.text_input("请输入 TikTok 视频链接：", placeholder="https://www.tiktok.com/@xxx/video/xxx")
         if st.button("🚀 开始分析网络视频", type="primary"):
@@ -189,7 +232,6 @@ if not st.session_state.processed:
             else:
                 st.warning("⚠️ 链接不能为空")
                 
-    # 模式二：本地上传
     else:
         uploaded_file = st.file_uploader("请拖拽或选择本地视频/音频文件（支持 mp4, mp3, m4a, wav 等）：", type=["mp4", "mp3", "m4a", "wav"])
         if st.button("🚀 开始智能提取本地文件", type="primary"):
@@ -198,28 +240,24 @@ if not st.session_state.processed:
                 try:
                     auto_cleanup_old_files()
                     
-                    # 确定文件后缀类型
                     file_ext = uploaded_file.name.split(".")[-1]
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     clean_name = safe_filename(uploaded_file.name.split(".")[0])
                     
-                    # 将上传的文件固化到本地临时目录
                     saved_path = f"temp_local_{timestamp}_{clean_name}.{file_ext}"
                     with open(saved_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                         
                     st.session_state.display_name = uploaded_file.name
                     
-                    # 判断如果是视频，则同时剥离音频；如果是纯音频，则视频位留空
                     if file_ext.lower() == "mp4":
                         st.session_state.video_path = saved_path
                         st.session_state.audio_path = saved_path.replace(".mp4", ".mp3")
                         extract_audio_pure_python(saved_path, st.session_state.audio_path)
                     else:
-                        st.session_state.video_path = "" # 纯音频不渲染视频播放器
+                        st.session_state.video_path = "" 
                         st.session_state.audio_path = saved_path
                         
-                    # 启动 AI 语音转写
                     st.session_state.en_results = transcribe_only_en(saved_path, status_box)
                     st.session_state.processed = True
                     status_box.empty()
@@ -233,7 +271,6 @@ if not st.session_state.processed:
 else:
     if st.button("⬅️ 返回主页（处理新任务）"):
         st.session_state.processed = False
-        # 退出时彻底清空本地刚才的各类临时缓存资产
         if st.session_state.video_path and os.path.exists(st.session_state.video_path):
             try: os.remove(st.session_state.video_path)
             except: pass
@@ -251,7 +288,6 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 豆腐块微型视频播放器（只在解析网络视频或本地上传 mp4 时展示，纯音频文件自动跳过不占位）
         if st.session_state.video_path and os.path.exists(st.session_state.video_path):
             v_side1, v_mid, v_side2 = st.columns([0.1, 0.8, 0.1])
             with v_mid:
@@ -299,7 +335,6 @@ else:
                 st.caption("✨ 点击代码块右上角即可一键秒拷：")
                 st.code(full_text_to_copy, language="text")
 
-        # 字幕包组装
         current_srt_output = ""
         for idx, sub in enumerate(rendered_subtitles, start=1):
             srt_start = f"00:{sub['start']},000"
@@ -308,9 +343,7 @@ else:
             else: srt_text = sub['en'] if target_lang_code == "en" else sub['trans']
             current_srt_output += f"{idx}\n{srt_start} --> {srt_end}\n{srt_text}\n\n"
 
-        # 统一资产导出面板逻辑
         with col1:
-            # 1. 导出视频按钮（仅在有视频源时显现）
             if st.session_state.video_path and os.path.exists(st.session_state.video_path):
                 with open(st.session_state.video_path, "rb") as vf:
                     st.download_button(
@@ -321,7 +354,6 @@ else:
                         use_container_width=True
                     )
             
-            # 2. 导出音频按钮
             if os.path.exists(st.session_state.audio_path):
                 with open(st.session_state.audio_path, "rb") as af:
                     st.download_button(
@@ -331,10 +363,7 @@ else:
                         mime="audio/mp3", 
                         use_container_width=True
                     )
-            else:
-                st.error("⚠️ 音频资产丢失")
                     
-            # 3. 导出字幕按钮
             st.download_button(
                 label="📄 下载字幕 (.srt)",
                 data=current_srt_output,
@@ -345,7 +374,6 @@ else:
 
         st.markdown("---")
         
-        # 逐行时间轴高保真对照渲染
         with st.container(height=520):
             for sub in rendered_subtitles:
                 sub_col_time, sub_col_text = st.columns([1, 4])
