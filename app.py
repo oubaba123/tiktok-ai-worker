@@ -9,11 +9,20 @@ from faster_whisper import WhisperModel
 from deep_translator import DeeplTranslator, GoogleTranslator  
 
 # 设置宽屏模式
-st.set_page_config(page_title="TikTok AI 视频字幕工作台 (DeepL免卡全对齐版)", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="TikTok AI 视频字幕工作台 (DeepL免卡完美版)", page_icon="🎬", layout="wide")
 
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
+    .video-title-text {
+        font-size: 15px;
+        color: #111111;
+        font-weight: bold;
+        margin-bottom: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
     .time-badge {
         color: #666666;
         font-family: 'Courier New', Courier, monospace;
@@ -94,10 +103,11 @@ def download_tk_video(video_url, status_text):
         info_dict = ydl.extract_info(video_url, download=False)
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
-        title = info_dict.get('title', 'video_title')[:20]
+        raw_title = info_dict.get('title', 'video_title')
+        title_short = raw_title[:20]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{title}")
+    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{title_short}")
     
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -117,7 +127,7 @@ def download_tk_video(video_url, status_text):
     audio_file_path = actual_filename.replace(".mp4", ".mp3")
     extract_audio_pure_python(actual_filename, audio_file_path)
         
-    return actual_filename
+    return actual_filename, raw_title
 
 def format_short_time(seconds):
     td = datetime.timedelta(seconds=seconds)
@@ -126,7 +136,7 @@ def format_short_time(seconds):
 
 def transcribe_any_audio(file_path, status_text):
     model = load_whisper_model()
-    status_text.text("AI 正在高精提取语音数据（正在自动识别多语种声轨）...")
+    status_text.text("AI 正在高精提取语音数据...")
     segments, info = model.transcribe(file_path, beam_size=5, language=None)
     
     detected_lang = info.language
@@ -158,7 +168,7 @@ if not st.session_state.authenticated:
     with login_col:
         st.markdown("<br><br>", unsafe_allow_html=True)
         st.subheader("🔒 视频智能字幕工作台 · 内部登录")
-        st.caption("仅供内部人员使用，支持换电脑访问（请开启系统代理）。")
+        st.caption("仅供内部人员使用，支持换电脑访问。")
         st.markdown("---")
         input_user = st.text_input("👤 用户名账号：", placeholder="请输入您的账号")
         input_pwd = st.text_input("🔑 登录密码：", type="password", placeholder="请输入您的密码")
@@ -180,6 +190,7 @@ if "processed" not in st.session_state:
     st.session_state.detected_lang = "en"
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
+    st.session_state.video_title = ""  # 🌟 用于存放视频原生标题
 
 # 侧边栏登出
 st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
@@ -201,15 +212,16 @@ if not st.session_state.processed:
     
     if st.session_state.mode == "🌐 链接解析":
         url_input = st.text_input("请输入 TikTok 视频链接：", placeholder="https://www.tiktok.com/@xxx/video/xxx")
-        if st.button("🚀 开始分析网络视频", type="primary"):
+        if st.button("🚀 开始分析 network 视频", type="primary"):
             if url_input:
                 status_box = st.info("初始化网络任务中...")
                 try:
                     auto_cleanup_old_files()
-                    v_path = download_tk_video(url_input, status_box)
+                    v_path, r_title = download_tk_video(url_input, status_box)
                     st.session_state.video_path = v_path
                     st.session_state.audio_path = v_path.replace(".mp4", ".mp3")
                     st.session_state.display_name = os.path.basename(v_path)
+                    st.session_state.video_title = r_title  # 🌟 录入网络标题
                     
                     res, lang = transcribe_any_audio(st.session_state.video_path, status_box)
                     st.session_state.raw_results = res
@@ -235,6 +247,8 @@ if not st.session_state.processed:
                     with open(saved_path, "wb") as f: f.write(uploaded_file.getbuffer())
                         
                     st.session_state.display_name = uploaded_file.name
+                    st.session_state.video_title = uploaded_file.name  # 🌟 本地文件标题即为文件名
+                    
                     if file_ext.lower() == "mp4":
                         st.session_state.video_path = saved_path
                         st.session_state.audio_path = saved_path.replace(".mp4", ".mp3")
@@ -266,6 +280,7 @@ else:
         st.session_state.video_path = ""
         st.session_state.audio_path = ""
         st.session_state.raw_results = []
+        st.session_state.video_title = ""
         st.rerun()
 
     st.markdown("---")
@@ -273,6 +288,11 @@ else:
     
     with col1:
         st.subheader("📦 工具与下载")
+        
+        # 🌟 核心改进：把找回的视频原生标题完美贴在预览框上方
+        if st.session_state.video_title:
+            st.markdown(f'<div class="video-title-text" title="{st.session_state.video_title}">🎬 标题: {st.session_state.video_title}</div>', unsafe_allow_html=True)
+            
         if st.session_state.video_path and os.path.exists(st.session_state.video_path):
             v_side1, v_mid, v_side2 = st.columns([0.1, 0.8, 0.1])
             with v_mid: st.video(st.session_state.video_path)
@@ -327,7 +347,6 @@ else:
                 
             rendered_subtitles.append({"raw": item["raw_text"], "trans": t_text, "start": item["start"], "end": item["end"]})
             
-            # 🌟 核心改进：去除每句之间多余的额外空行，完美紧凑换行
             if is_bilingual:
                 full_text_to_copy += f"{item['raw_text']}\n{t_text}\n" if t_text else f"{item['raw_text']}\n"
             else:
