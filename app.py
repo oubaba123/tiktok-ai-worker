@@ -37,12 +37,19 @@ st.markdown("""
         border-bottom: 1px dashed #eef2f6;
         margin-bottom: 12px;
     }
+    /* 自定义标题栏样式 */
+    .video-title-box {
+        background-color: #f8f9fa;
+        padding: 10px;
+        border-radius: 6px;
+        border-left: 4px solid #ff4b4b;
+        margin-bottom: 10px;
+        font-size: 14px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ================= 👥 独立账号权限白名单管理 =================
-# 🌟 【重点修改区】在这里自由管理你的人员名单，左边是账号，右边是密码。
-# 小白用户登录时必须完全匹配。注意：账号建议使用小写拼音或英文。
 USER_WHITE_LIST = {
     "george": "666888",      # 你的管理员账号
     "laowang": "888888",     # 合作方老王
@@ -56,7 +63,6 @@ if "authenticated" not in st.session_state:
 
 # --- 🔐 拦截门禁系统 ---
 if not st.session_state.authenticated:
-    # 居中展示一个干净的登录卡片
     _, login_col, _ = st.columns([1, 1.5, 1])
     with login_col:
         st.markdown("<br><br>", unsafe_allow_html=True)
@@ -64,13 +70,11 @@ if not st.session_state.authenticated:
         st.caption("本系统属于私有资产，仅供受邀内部人员使用。")
         st.markdown("---")
         
-        # 账号密码输入框
         input_user = st.text_input("👤 用户名账号：", placeholder="请输入您的专属账号（拼音/英文）")
         input_pwd = st.text_input("🔑 登录密码：", type="password", placeholder="请输入您的密码")
         
         st.markdown("<br>", unsafe_allow_html=True)
         if st.button("安全登录 ➔", type="primary", use_container_width=True):
-            # 校验账号是否存在，以及密码是否完全吻合
             if input_user in USER_WHITE_LIST and input_pwd == USER_WHITE_LIST[input_user]:
                 st.session_state.authenticated = True
                 st.session_state.current_user = input_user
@@ -79,7 +83,7 @@ if not st.session_state.authenticated:
             else:
                 st.error("❌ 账号或密码不正确，请重新输入或联系乔治！")
                 
-    st.stop() # 🛑 强行拦截：只要没登录成功，后面的业务代码连一像素都不会渲染，绝对安全！
+    st.stop()
 
 
 # ================= 📦 模型缓存 =================
@@ -136,10 +140,14 @@ def download_tk_video(video_url, status_text):
         info_dict = ydl.extract_info(video_url, download=False)
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
-        title = info_dict.get('title', 'video_title')[:20]
+        # 获取完整标题保存到 session_state 中
+        full_title = info_dict.get('title', 'video_title')
+        st.session_state.video_title_raw = full_title
+        
+        short_title = full_title[:20]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{title}")
+    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{short_title}")
     
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -189,9 +197,11 @@ if "processed" not in st.session_state:
     st.session_state.en_results = []
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
+    # ✨ 新增：用于缓存抓取到的视频原标题和翻译后的标题
+    st.session_state.video_title_raw = "未获取到视频标题"
+    st.session_state.video_title_translated = ""
 
 # ================= 主业务界面渲染 =================
-# 在侧边栏右上角贴心地加上一个【退出登录】按钮，方便切换账号
 st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
 if st.sidebar.button("🚪 退出当前登录"):
     st.session_state.authenticated = False
@@ -214,11 +224,13 @@ if not st.session_state.processed:
     
     if st.session_state.mode == "🌐 链接解析":
         url_input = st.text_input("请输入 TikTok 视频链接：", placeholder="https://www.tiktok.com/@xxx/video/xxx")
-        if st.button("🚀 开始分析网络视频", type="primary"):
+        if st.button("🚀 开始分析 network 视频", type="primary"):
             if url_input:
                 status_box = st.info("初始化网络任务中...")
                 try:
                     auto_cleanup_old_files()
+                    # 每次新解析前清空旧标题缓存
+                    st.session_state.video_title_translated = ""
                     v_path = download_tk_video(url_input, status_box)
                     st.session_state.video_path = v_path
                     st.session_state.audio_path = v_path.replace(".mp4", ".mp3")
@@ -239,6 +251,8 @@ if not st.session_state.processed:
                 status_box = st.info("正在将文件载入内存并启动 AI 核心...")
                 try:
                     auto_cleanup_old_files()
+                    st.session_state.video_title_raw = uploaded_file.name  # 本地上传直接用文件名当标题
+                    st.session_state.video_title_translated = ""
                     
                     file_ext = uploaded_file.name.split(".")[-1]
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -288,12 +302,34 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
+        # 1. 播放视频
         if st.session_state.video_path and os.path.exists(st.session_state.video_path):
             v_side1, v_mid, v_side2 = st.columns([0.1, 0.8, 0.1])
             with v_mid:
                 st.video(st.session_state.video_path)
             st.markdown("<br>", unsafe_allow_html=True)
             
+        # ✨ 2. 新增：视频标题显示与点击翻译功能区
+        st.markdown("**📌 视频标题信息**")
+        st.markdown(f'<div class="video-title-box"><b>原标题：</b>{st.session_state.video_title_raw}</div>', unsafe_allow_html=True)
+        
+        # 翻译按钮和结果展示
+        t_btn_col, _ = st.columns([1.5, 2])
+        with t_btn_col:
+            if st.button("🌐 翻译标题成中文", type="secondary", use_container_width=True):
+                if st.session_state.video_title_raw:
+                    try:
+                        with st.spinner("正在翻译标题..."):
+                            translated = GoogleTranslator(source='auto', target='zh-CN').translate(st.session_state.video_title_raw)
+                            st.session_state.video_title_translated = translated
+                    except Exception as e:
+                        st.error("翻译失败，请重试")
+        
+        # 如果有翻译结果，则渲染出来
+        if st.session_state.video_title_translated:
+            st.markdown(f'<div class="video-title-box" style="border-left: 4px solid #28a745;"><b>中文翻译：</b>{st.session_state.video_title_translated}</div>', unsafe_allow_html=True)
+            
+        st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("**💾 资产一键导出**")
 
     with col2:
