@@ -37,15 +37,12 @@ st.markdown("""
         border-bottom: 1px dashed #eef2f6;
         margin-bottom: 12px;
     }
-    /* 自定义标题栏样式 - 优化间距减少滚动 */
-    .video-title-box {
-        background-color: #f8f9fa;
-        padding: 8px 10px;
-        border-radius: 6px;
-        border-left: 4px solid #ff4b4b;
-        margin-bottom: 5px;
+    /* 自定义美化文本显示框 */
+    .custom-title-label {
         font-size: 13px;
-        line-height: 1.4;
+        font-weight: bold;
+        color: #333333;
+        margin-bottom: 2px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -138,19 +135,27 @@ def download_tk_video(video_url, status_text):
         network_retry_opts['proxy'] = final_proxy
         
     with YoutubeDL(network_retry_opts) as ydl:
-        # 🌟 核心修复：直接获取原始完整标题描述，不作任何裁剪
         info_dict = ydl.extract_info(video_url, download=False)
         
-        # 针对 TikTok 视频，优先提取无损 description 作为标题，如果没有则拿 title
-        full_title = info_dict.get('description') or info_dict.get('title') or 'video_title'
-        # 清洗掉可能多余的回车换行，连贯成一条
+        # 🌟 核心升级：尝试从多个备用字段捞取无损全文本。TikTok 有时把全称藏在 title 或纯描述里
+        possible_titles = [
+            info_dict.get('title'),
+            info_dict.get('description'),
+            info_dict.get('fulltitle')
+        ]
+        
+        # 过滤掉空的，拿到最长、最没有被截断的那一个
+        valid_titles = [t for t in possible_titles if t and "..." not in t]
+        if valid_titles:
+            full_title = valid_titles[0]
+        else:
+            full_title = info_dict.get('title') or info_dict.get('description') or 'video_title'
+            
         full_title = " ".join(full_title.split())
         st.session_state.video_title_raw = full_title
         
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
-        
-        # 只有在保存本地文件名时才截断，防止 Windows 系统因为文件名过长报错
         short_title = st.session_state.video_title_raw[:15]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
@@ -314,12 +319,12 @@ else:
                 st.video(st.session_state.video_path)
             st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
             
-        # 🌟 2. 核心大改动：完美展现无损完整原标题 + 专属一键复制文本框
-        st.markdown("<div style='margin-bottom: 4px; font-size: 14px;'><b>📌 视频标题与复制（点击右上角一键拷贝）</b></div>", unsafe_allow_html=True)
+        # 🌟 2. 交互式标题：自带原生一键复制功能，自动换行，永不截断
+        st.markdown("<div style='margin-bottom: 4px; font-size: 14px;'><b>📌 视频标题与复制</b></div>", unsafe_allow_html=True)
         
         if not st.session_state.video_title_translated:
-            # 状态 A：未翻译时展示无截断的完整代码文本框（自带一键复制按钮）
-            st.code(st.session_state.video_title_raw, language="text")
+            # 未翻译状态：使用文本框，自带原生复制按钮，且完美自动换行
+            st.text_copy_ some_text = st.text_input(label="📄 完整原标题（右侧按钮可一键复制）:", value=st.session_state.video_title_raw, key="copy_en_title")
             
             if st.button("🌐 翻译标题成中文", type="secondary", use_container_width=True):
                 if st.session_state.video_title_raw:
@@ -331,14 +336,12 @@ else:
                     except:
                         st.error("翻译失败，请重试")
         else:
-            # 状态 B：已翻译时，原英文标题与中文翻译并排，并且各自带有一个一键复制按钮
+            # 已翻译状态：两栏并排，各自配备原生一键复制栏
             t_col1, t_col2 = st.columns(2)
             with t_col1:
-                st.caption("📄 完整原标题:")
-                st.code(st.session_state.video_title_raw, language="text")
+                st.text_input(label="📄 完整原标题:", value=st.session_state.video_title_raw, key="copy_en_title_b")
             with t_col2:
-                st.caption("🇨🇳 中文翻译标题:")
-                st.code(st.session_state.video_title_translated, language="text")
+                st.text_input(label="🇨🇳 中文翻译:", value=st.session_state.video_title_translated, key="copy_zh_title")
             
             # 按钮转换为一键恢复
             if st.button("🔙 恢复原本标题", type="secondary", use_container_width=True):
