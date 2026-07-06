@@ -9,36 +9,40 @@ from faster_whisper import WhisperModel
 from deep_translator import DeeplTranslator, GoogleTranslator  
 
 # 设置宽屏模式
-st.set_page_config(page_title="TikTok AI 视频字幕工作台 (带标题同步翻译版)", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬", layout="wide")
 
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 🌟 彻底重构标题盒子 CSS，强制文字不缩写、不变成三个点、允许正常换行 */
+    /* 🌟 新增：右侧顶部大标题区域 CSS，强行解除一切宽度限制，允许无限换行，拒绝三个点 */
+    .main-workspace-title {
+        font-size: 24px;
+        font-weight: bold;
+        color: #111111;
+        margin-bottom: 5px;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        word-break: break-all !important;
+    }
+    .main-workspace-subtitle {
+        font-size: 14px;
+        color: #666666;
+        margin-bottom: 15px;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        word-break: break-all !important;
+    }
+    
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
         padding: 10px;
         border-radius: 4px;
         margin-bottom: 15px;
-        white-space: normal !important;  /* 允许自然换行 */
-        word-break: break-all !important; /* 遇到长英文强制折行 */
-    }
-    .video-title-main {
-        font-size: 15px;
-        color: #111111;
-        font-weight: bold;
         white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-    }
-    .video-title-trans {
-        font-size: 13px;
-        color: #666666;
-        margin-top: 4px;
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
+        word-break: break-all !important;
     }
     .time-badge {
         color: #666666;
@@ -123,7 +127,6 @@ def download_tk_video(video_url, status_text):
         raw_title = info_dict.get('title', 'video_title')
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    # 文件名完美保留原生的所有长标题字符
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title}")
     
     ydl_opts = {
@@ -313,8 +316,11 @@ else:
             "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
-        header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
-        with header_col: st.subheader("📄 交互式字幕工作区")
+        # 🌟 彻底重构：右侧大标题独自占一行，100% 完整平铺，绝不缩写！
+        st.markdown(f'<div class="main-workspace-title">📄 交互式字幕工作区 - {st.session_state.video_title}</div>', unsafe_allow_html=True)
+        
+        # 把选择语种和复制等控制按钮单独放在第二行
+        select_col, toggle_col, copy_col, _ = st.columns([1.5, 1.2, 1.2, 2.5])
         with select_col:
             target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
             deepl_code = lang_config[target_lang_name]["deepl"]
@@ -340,6 +346,10 @@ else:
                     translated_video_title = emergency_title_trans.translate(st.session_state.video_title)
                 except:
                     translated_video_title = "[标题翻译超时]"
+
+        # 🌟 如果有翻译，在大标题下方再展示一行翻译后全量不缩写的子标题
+        if translated_video_title and target_lang_name != "English (United States)":
+            st.markdown(f'<div class="main-workspace-subtitle">🌍 译文标题: {translated_video_title}</div>', unsafe_allow_html=True)
 
         rendered_subtitles = []
         for item in st.session_state.raw_results:
@@ -370,12 +380,11 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 🌟 样式全面打通：原标题与译文彻底释放，杜绝一切前端省略号，无限换行直到完全展现
+        # 左侧预览框顶部的备份展示区也同样应用了不缩写全量换行样式
         if st.session_state.video_title:
             st.markdown(f"""
             <div class="video-title-box">
-                <div class="video-title-main">🎬 原标题: {st.session_state.video_title}</div>
-                {f'<div class="video-title-trans">🌍 译文: {translated_video_title}</div>' if translated_video_title and target_lang_name != "English (United States)" else ''}
+                <div style="font-size: 14px; color: #111111; font-weight: bold; word-break: break-all;">🎬 源标题: {st.session_state.video_title}</div>
             </div>
             """, unsafe_allow_html=True)
             
