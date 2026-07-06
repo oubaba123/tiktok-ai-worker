@@ -138,15 +138,20 @@ def download_tk_video(video_url, status_text):
         network_retry_opts['proxy'] = final_proxy
         
     with YoutubeDL(network_retry_opts) as ydl:
+        # 🌟 核心修复：直接获取原始完整标题描述，不作任何裁剪
         info_dict = ydl.extract_info(video_url, download=False)
+        
+        # 针对 TikTok 视频，优先提取无损 description 作为标题，如果没有则拿 title
+        full_title = info_dict.get('description') or info_dict.get('title') or 'video_title'
+        # 清洗掉可能多余的回车换行，连贯成一条
+        full_title = " ".join(full_title.split())
+        st.session_state.video_title_raw = full_title
+        
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
         
-        # 🌟 修复点 1：完整保留原始标题，不截断，供前端展示
-        st.session_state.video_title_raw = info_dict.get('title', 'video_title')
-        
-        # 只有在保存本地文件名时才截断，防止 Windows 系统报错
-        short_title = st.session_state.video_title_raw[:20]
+        # 只有在保存本地文件名时才截断，防止 Windows 系统因为文件名过长报错
+        short_title = st.session_state.video_title_raw[:15]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{short_title}")
@@ -199,7 +204,6 @@ if "processed" not in st.session_state:
     st.session_state.en_results = []
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
-    # 🌟 修复点 2：全局标题状态管理
     st.session_state.video_title_raw = "未获取到视频标题"
     st.session_state.video_title_translated = ""
 
@@ -231,7 +235,7 @@ if not st.session_state.processed:
                 status_box = st.info("初始化网络任务中...")
                 try:
                     auto_cleanup_old_files()
-                    st.session_state.video_title_translated = "" # 清空上一次的翻译状态
+                    st.session_state.video_title_translated = "" 
                     v_path = download_tk_video(url_input, status_box)
                     st.session_state.video_path = v_path
                     st.session_state.audio_path = v_path.replace(".mp4", ".mp3")
@@ -252,7 +256,7 @@ if not st.session_state.processed:
                 status_box = st.info("正在将文件载入内存并启动 AI 核心...")
                 try:
                     auto_cleanup_old_files()
-                    st.session_state.video_title_raw = uploaded_file.name  # 本地文件直接用全名
+                    st.session_state.video_title_raw = uploaded_file.name  
                     st.session_state.video_title_translated = ""
                     
                     file_ext = uploaded_file.name.split(".")[-1]
@@ -310,12 +314,13 @@ else:
                 st.video(st.session_state.video_path)
             st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
             
-        # 🌟 修复点 3：极致紧凑型双向切换标题栏
-        st.markdown("<div style='margin-bottom: 4px; font-size: 14px;'><b>📌 视频标题信息</b></div>", unsafe_allow_html=True)
+        # 🌟 2. 核心大改动：完美展现无损完整原标题 + 专属一键复制文本框
+        st.markdown("<div style='margin-bottom: 4px; font-size: 14px;'><b>📌 视频标题与复制（点击右上角一键拷贝）</b></div>", unsafe_allow_html=True)
         
         if not st.session_state.video_title_translated:
-            # 状态 A：未翻译时，全宽展示完整原标题
-            st.markdown(f'<div class="video-title-box"><b>原标题：</b>{st.session_state.video_title_raw}</div>', unsafe_allow_html=True)
+            # 状态 A：未翻译时展示无截断的完整代码文本框（自带一键复制按钮）
+            st.code(st.session_state.video_title_raw, language="text")
+            
             if st.button("🌐 翻译标题成中文", type="secondary", use_container_width=True):
                 if st.session_state.video_title_raw:
                     try:
@@ -326,14 +331,16 @@ else:
                     except:
                         st.error("翻译失败，请重试")
         else:
-            # 状态 B：已翻译时，原标题与中文并排左右两栏分流，绝不往下野蛮生长
+            # 状态 B：已翻译时，原英文标题与中文翻译并排，并且各自带有一个一键复制按钮
             t_col1, t_col2 = st.columns(2)
             with t_col1:
-                st.markdown(f'<div class="video-title-box" style="height: 100%;"><b>原标题：</b>{st.session_state.video_title_raw}</div>', unsafe_allow_html=True)
+                st.caption("📄 完整原标题:")
+                st.code(st.session_state.video_title_raw, language="text")
             with t_col2:
-                st.markdown(f'<div class="video-title-box" style="border-left: 4px solid #28a745; height: 100%;"><b>中文翻译：</b>{st.session_state.video_title_translated}</div>', unsafe_allow_html=True)
+                st.caption("🇨🇳 中文翻译标题:")
+                st.code(st.session_state.video_title_translated, language="text")
             
-            # 按钮自动转换为“一键恢复”
+            # 按钮转换为一键恢复
             if st.button("🔙 恢复原本标题", type="secondary", use_container_width=True):
                 st.session_state.video_title_translated = ""
                 st.rerun()
