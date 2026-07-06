@@ -14,7 +14,22 @@ st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 🌟 新增：右侧顶部大标题区域 CSS，强行解除一切宽度限制，允许无限换行，拒绝三个点 */
+    /* 🌟【终极核心修复】强行粉碎 Streamlit 官方下拉选择框(st.selectbox)里的文字截断和三个点 */
+    [data-baseweb="select"] span, 
+    .stSelectbox div[data-baseweb="select"] div,
+    .stSelectbox [data-testid="stMarkdownContainer"] p {
+        max-width: none !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+    
+    /* 保证下拉菜单展开时的选项也不缩写、不弹三个点 */
+    ul[role="listbox"] li, ul[role="listbox"] li span {
+        white-space: normal !important;
+        word-break: break-all !important;
+    }
+
     .main-workspace-title {
         font-size: 24px;
         font-weight: bold;
@@ -34,7 +49,6 @@ st.markdown("""
         text-overflow: clip !important;
         word-break: break-all !important;
     }
-    
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
@@ -316,11 +330,11 @@ else:
             "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
-        # 🌟 彻底重构：右侧大标题独自占一行，100% 完整平铺，绝不缩写！
+        # 顶部平铺不限宽度的干净大标题
         st.markdown(f'<div class="main-workspace-title">📄 交互式字幕工作区 - {st.session_state.video_title}</div>', unsafe_allow_html=True)
         
-        # 把选择语种和复制等控制按钮单独放在第二行
-        select_col, toggle_col, copy_col, _ = st.columns([1.5, 1.2, 1.2, 2.5])
+        # 🌟 调整选择语种和控制按钮这一行的列比例，把下拉框列宽从 1.5 加大到 3.0，杜绝内部文字因为太挤而弹三个点
+        select_col, toggle_col, copy_col, _ = st.columns([3.0, 1.2, 1.2, 1.0])
         with select_col:
             target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
             deepl_code = lang_config[target_lang_name]["deepl"]
@@ -347,7 +361,6 @@ else:
                 except:
                     translated_video_title = "[标题翻译超时]"
 
-        # 🌟 如果有翻译，在大标题下方再展示一行翻译后全量不缩写的子标题
         if translated_video_title and target_lang_name != "English (United States)":
             st.markdown(f'<div class="main-workspace-subtitle">🌍 译文标题: {translated_video_title}</div>', unsafe_allow_html=True)
 
@@ -380,7 +393,6 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 左侧预览框顶部的备份展示区也同样应用了不缩写全量换行样式
         if st.session_state.video_title:
             st.markdown(f"""
             <div class="video-title-box">
