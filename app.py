@@ -14,7 +14,7 @@ st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 左侧视频上方小看板样式 */
+    /* 左侧视频上方小看板样式 - 允许长标题和#标签自动折行完整显示 */
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
@@ -300,15 +300,13 @@ else:
             "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
-        # 补全可能带有省略号的短原名标题
+        # 🌟【核心修复逻辑】：彻底删除上一轮用AI拼接文案的魔改，直接拿回作者发布的带#标签的原生完整标题
         final_full_title = st.session_state.video_title
-        if "..." in final_full_title and st.session_state.raw_results:
-            final_full_title = st.session_state.raw_results[0]["raw_text"] + " " + st.session_state.raw_results[1]["raw_text"]
         
-        # 🌟【改动点】：彻底精简大标题，后面不再拼接长文本尾巴
+        # 完美的右侧极简纯净大标题（完美对齐第二张图）
         header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
         with header_col: 
-            st.markdown("#### 📄 交互式字幕工作区") # 👈 纯净大标题
+            st.markdown("#### 📄 交互式字幕工作区") 
         with select_col:
             target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
             deepl_code = lang_config[target_lang_name]["deepl"]
@@ -336,7 +334,7 @@ else:
                 except:
                     translated_video_title = "[标题翻译超时]"
 
-        # 🌟【改动点】：下拉框下面的小字地球仪行，同步变为纯净版的译文标题显示，不再有多余小尾巴
+        # 下拉框下方的小字地球仪行，展示作者原生带#标签标题的对应译文
         if translated_video_title and target_lang_name != "English (United States)":
             st.markdown(f"🌍 译文标题: {translated_video_title}")
 
@@ -370,7 +368,7 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 左侧保留高保真、完全不限制宽度的独立标题展示看板（带自动换行）
+        # 🌟 左侧小看板：同样完美呈现原作者最完整带有带有 `#标签` 流量标记的视频文案，并支持自动换行
         if final_full_title:
             st.markdown(f"""
             <div class="video-title-box">
