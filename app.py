@@ -124,10 +124,14 @@ def format_short_time(seconds):
     parts = str(td).split(".")[0].split(":")
     return f"{parts[1]}:{parts[2]}"
 
-def transcribe_only_en(file_path, status_text):
+def transcribe_any_audio(file_path, status_text):
     model = load_whisper_model()
-    status_text.text("AI 正在高精提取语音数据...")
-    segments, _ = model.transcribe(file_path, beam_size=5)
+    status_text.text("AI 正在高精提取语音数据（正在自动识别多语种声轨）...")
+    # 🌟 将语言设为 auto，让 Whisper 自动判定视频原音到底是英语还是西班牙语
+    segments, info = model.transcribe(file_path, beam_size=5, language=None)
+    
+    # 记录视频检测出来的真实原始语言（比如 es 或者 en）
+    detected_lang = info.language
     
     results = []
     for i, segment in enumerate(segments, start=1):
@@ -135,9 +139,9 @@ def transcribe_only_en(file_path, status_text):
             "index": i,
             "start": format_short_time(segment.start),
             "end": format_short_time(segment.end),
-            "en": segment.text.strip()
+            "raw_text": segment.text.strip() # 🌟 保存最纯粹的初始声音文本
         })
-    return results
+    return results, detected_lang
 
 # ================= 👥 独立账号权限白名单管理 =================
 USER_WHITE_LIST = {
@@ -174,7 +178,8 @@ if "processed" not in st.session_state:
     st.session_state.processed = False
     st.session_state.video_path = ""
     st.session_state.audio_path = ""
-    st.session_state.en_results = []
+    st.session_state.raw_results = []
+    st.session_state.detected_lang = "en"
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
 
@@ -207,7 +212,12 @@ if not st.session_state.processed:
                     st.session_state.video_path = v_path
                     st.session_state.audio_path = v_path.replace(".mp4", ".mp3")
                     st.session_state.display_name = os.path.basename(v_path)
-                    st.session_state.en_results = transcribe_only_en(st.session_state.video_path, status_box)
+                    
+                    # 🌟 识别并记录原音语种
+                    res, lang = transcribe_any_audio(st.session_state.video_path, status_box)
+                    st.session_state.raw_results = res
+                    st.session_state.detected_lang = lang
+                    
                     st.session_state.processed = True
                     status_box.empty()
                     st.rerun() 
@@ -236,7 +246,11 @@ if not st.session_state.processed:
                         st.session_state.video_path = "" 
                         st.session_state.audio_path = saved_path
                         
-                    st.session_state.en_results = transcribe_only_en(saved_path, status_box)
+                    # 🌟 识别并记录原音语种
+                    res, lang = transcribe_any_audio(saved_path, status_box)
+                    st.session_state.raw_results = res
+                    st.session_state.detected_lang = lang
+                    
                     st.session_state.processed = True
                     status_box.empty()
                     st.rerun()
@@ -255,7 +269,7 @@ else:
             except: pass
         st.session_state.video_path = ""
         st.session_state.audio_path = ""
-        st.session_state.en_results = []
+        st.session_state.raw_results = []
         st.rerun()
 
     st.markdown("---")
@@ -270,11 +284,10 @@ else:
         st.markdown("**💾 资产一键导出**")
 
     with col2:
-        # 🌟 西班牙语（es）已经在这里对齐追加！
         lang_options = {
             "简体中文": "zh-CN",
             "English (United States)": "en",
-            "Español (Spanish)": "es", # 👈 完美的西班牙语通道
+            "Español (Spanish)": "es", 
             "日本語": "ja",
             "Tiếng Việt": "vi",
             "Português (Brasil)": "pt"
@@ -291,18 +304,20 @@ else:
         translator = GoogleTranslator(source='auto', target=target_lang_code)
         
         rendered_subtitles = []
-        for item in st.session_state.en_results:
-            if target_lang_code != "en":
-                try: t_text = translator.translate(item["en"])
+        for item in st.session_state.raw_results:
+            # 🌟 聪明优化：只有当“目标语言”和“检测出来的视频原音语种”完全一致时，才不触发翻译
+            if target_lang_code == st.session_state.detected_lang:
+                t_text = ""
+            else:
+                try: t_text = translator.translate(item["raw_text"])
                 except: t_text = "[翻译失败]"
-            else: t_text = ""
                 
-            rendered_subtitles.append({"en": item["en"], "trans": t_text, "start": item["start"], "end": item["end"]})
+            rendered_subtitles.append({"raw": item["raw_text"], "trans": t_text, "start": item["start"], "end": item["end"]})
             
             if is_bilingual:
-                full_text_to_copy += f"{item['en']}\n{t_text}\n\n" if t_text else f"{item['en']}\n\n"
+                full_text_to_copy += f"{item['raw_text']}\n{t_text}\n\n" if t_text else f"{item['raw_text']}\n\n"
             else:
-                full_text_to_copy += f"{item['en']}\n\n" if target_lang_code == "en" else f"{t_text}\n\n"
+                full_text_to_copy += f"{item['raw_text']}\n\n" if not t_text else f"{t_text}\n\n"
 
         with copy_col:
             with st.popover("📋 复制文案", use_container_width=True):
@@ -313,8 +328,8 @@ else:
         for idx, sub in enumerate(rendered_subtitles, start=1):
             srt_start = f"00:{sub['start']},000"
             srt_end = f"00:{sub['end']},000"
-            if is_bilingual: srt_text = f"{sub['en']}\n{sub['trans']}" if sub['trans'] else sub['en']
-            else: srt_text = sub['en'] if target_lang_code == "en" else sub['trans']
+            if is_bilingual: srt_text = f"{sub['raw']}\n{sub['trans']}" if sub['trans'] else sub['raw']
+            else: srt_text = sub['raw'] if not sub['trans'] else sub['trans']
             current_srt_output += f"{idx}\n{srt_start} --> {srt_end}\n{srt_text}\n\n"
 
         with col1:
@@ -336,9 +351,9 @@ else:
                 with sub_col_time: st.markdown(f'<div class="time-badge">{sub["start"]}-{sub["end"]}</div>', unsafe_allow_html=True)
                 with sub_col_text:
                     if is_bilingual:
-                        st.markdown(f'<div class="en-text">{sub["en"]}</div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="en-text">{sub["raw"]}</div>', unsafe_allow_html=True)
                         if sub["trans"]: st.markdown(f'<div class="zh-text">{sub["trans"]}</div>', unsafe_allow_html=True)
                     else:
-                        if target_lang_code == "en": st.markdown(f'<div class="en-text">{sub["en"]}</div>', unsafe_allow_html=True)
+                        if not sub["trans"]: st.markdown(f'<div class="en-text">{sub["raw"]}</div>', unsafe_allow_html=True)
                         else: st.markdown(f'<div class="en-text">{sub["trans"]}</div>', unsafe_allow_html=True)
                     st.markdown('<div class="sub-divider"></div>', unsafe_allow_html=True)
