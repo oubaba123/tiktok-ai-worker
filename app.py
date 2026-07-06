@@ -40,44 +40,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= 👥 独立账号权限白名单管理 =================
-USER_WHITE_LIST = {
-    "george": "666888",      # 你的管理员账号
-    "laowang": "888888",     # 合作方老王
-    "xiaozhang": "abc123"    # 员工小张
-}
-
-# 初始化登录状态
-if "authenticated" not in st.session_state:
-    st.session_state.authenticated = False
-    st.session_state.current_user = ""
-
-# --- 🔐 拦截门禁系统 ---
-if not st.session_state.authenticated:
-    _, login_col, _ = st.columns([1, 1.5, 1])
-    with login_col:
-        st.markdown("<br><br>", unsafe_allow_html=True)
-        st.subheader("🔒 视频智能字幕工作台 · 内部登录")
-        st.caption("本系统属于私有资产，仅供受邀内部人员使用。")
-        st.markdown("---")
-        
-        input_user = st.text_input("👤 用户名账号：", placeholder="请输入您的专属账号（拼音/英文）")
-        input_pwd = st.text_input("🔑 登录密码：", type="password", placeholder="请输入您的密码")
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("安全登录 ➔", type="primary", use_container_width=True):
-            if input_user in USER_WHITE_LIST and input_pwd == USER_WHITE_LIST[input_user]:
-                st.session_state.authenticated = True
-                st.session_state.current_user = input_user
-                st.success(f"🎉 登录成功！欢迎回来，{input_user}。")
-                st.rerun()
-            else:
-                st.error("❌ 账号或密码不正确，请重新输入或联系乔治！")
-                
-    st.stop()
-
-
-# ================= 📦 模型缓存 =================
+# ================= 模型缓存 =================
 @st.cache_resource
 def load_whisper_model():
     return WhisperModel("tiny", device="cpu", compute_type="int8")
@@ -129,29 +92,12 @@ def download_tk_video(video_url, status_text):
         
     with YoutubeDL(network_retry_opts) as ydl:
         info_dict = ydl.extract_info(video_url, download=False)
-        
-        # 🌟 捞取多重备用字段，防止 TikTok 局部 API 截断标题文案
-        possible_titles = [
-            info_dict.get('title'),
-            info_dict.get('description'),
-            info_dict.get('fulltitle')
-        ]
-        
-        valid_titles = [t for t in possible_titles if t and "..." not in t]
-        if valid_titles:
-            full_title = valid_titles[0]
-        else:
-            full_title = info_dict.get('title') or info_dict.get('description') or 'video_title'
-            
-        full_title = " ".join(full_title.split())
-        st.session_state.video_title_raw = full_title
-        
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
-        short_title = st.session_state.video_title_raw[:15]
+        title = info_dict.get('title', 'video_title')[:20]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{short_title}")
+    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{title}")
     
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -180,7 +126,7 @@ def format_short_time(seconds):
 
 def transcribe_only_en(file_path, status_text):
     model = load_whisper_model()
-    status_text.text("AI 正在高精提取语音 data...")
+    status_text.text("AI 正在高精提取语音数据...")
     segments, _ = model.transcribe(file_path, beam_size=5)
     
     results = []
@@ -193,7 +139,37 @@ def transcribe_only_en(file_path, status_text):
         })
     return results
 
-# ================= 状态保持核心初始化 =================
+# ================= 👥 独立账号权限白名单管理 =================
+USER_WHITE_LIST = {
+    "george": "666888",
+    "laowang": "888888",
+    "xiaozhang": "abc123"
+}
+
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.current_user = ""
+
+# 拦截门禁
+if not st.session_state.authenticated:
+    _, login_col, _ = st.columns([1, 1.5, 1])
+    with login_col:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.subheader("🔒 视频智能字幕工作台 · 内部登录")
+        st.caption("仅供内部人员使用，支持换电脑访问（请开启系统代理）。")
+        st.markdown("---")
+        input_user = st.text_input("👤 用户名账号：", placeholder="请输入您的账号")
+        input_pwd = st.text_input("🔑 登录密码：", type="password", placeholder="请输入您的密码")
+        if st.button("安全登录 ➔", type="primary", use_container_width=True):
+            if input_user in USER_WHITE_LIST and input_pwd == USER_WHITE_LIST[input_user]:
+                st.session_state.authenticated = True
+                st.session_state.current_user = input_user
+                st.rerun()
+            else:
+                st.error("❌ 账号或密码不正确！")
+    st.stop()
+
+# ================= 状态保持初始化 =================
 if "processed" not in st.session_state:
     st.session_state.processed = False
     st.session_state.video_path = ""
@@ -201,10 +177,8 @@ if "processed" not in st.session_state:
     st.session_state.en_results = []
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
-    st.session_state.video_title_raw = "未获取到视频标题"
-    st.session_state.video_title_translated = ""
 
-# ================= 主业务界面渲染 =================
+# 侧边栏登出
 st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
 if st.sidebar.button("🚪 退出当前登录"):
     st.session_state.authenticated = False
@@ -213,15 +187,12 @@ if st.sidebar.button("🚪 退出当前登录"):
     st.rerun()
 
 st.sidebar.header("🔧 系统状态")
-if os.path.exists("cookies.txt"):
-    st.sidebar.success("✅ cookies.txt 已就绪")
-else:
-    st.sidebar.error("❌ 未检测到 cookies.txt")
+if os.path.exists("cookies.txt"): st.sidebar.success("✅ cookies.txt 已就绪")
+else: st.sidebar.error("❌ 未检测到 cookies.txt")
 
-# --- 界面 1：输入与上传初始页 ---
+# --- 界面 1：输入与上传页 ---
 if not st.session_state.processed:
     auto_cleanup_old_files()
-    
     st.session_state.mode = st.radio("🔮 请选择识别模式：", ["🌐 链接解析", "📤 本地上传"], horizontal=True)
     st.markdown("---")
     
@@ -232,7 +203,6 @@ if not st.session_state.processed:
                 status_box = st.info("初始化网络任务中...")
                 try:
                     auto_cleanup_old_files()
-                    st.session_state.video_title_translated = "" 
                     v_path = download_tk_video(url_input, status_box)
                     st.session_state.video_path = v_path
                     st.session_state.audio_path = v_path.replace(".mp4", ".mp3")
@@ -241,31 +211,23 @@ if not st.session_state.processed:
                     st.session_state.processed = True
                     status_box.empty()
                     st.rerun() 
-                except Exception as e:
-                    status_box.error(f"💥 运行出错！错误原因: {str(e)}")
-            else:
-                st.warning("⚠️ 链接不能为空")
+                except Exception as e: status_box.error(f"💥 运行出错！原因: {str(e)}")
+            else: st.warning("⚠️ 链接不能为空")
                 
     else:
-        uploaded_file = st.file_uploader("请拖拽或选择本地视频/音频文件（支持 mp4, mp3, m4a, wav 等）：", type=["mp4", "mp3", "m4a", "wav"])
+        uploaded_file = st.file_uploader("请选择本地视频/音频文件：", type=["mp4", "mp3", "m4a", "wav"])
         if st.button("🚀 开始智能提取本地文件", type="primary"):
             if uploaded_file:
-                status_box = st.info("正在将文件载入内存并启动 AI 核心...")
+                status_box = st.info("正在将文件载入内存...")
                 try:
                     auto_cleanup_old_files()
-                    st.session_state.video_title_raw = uploaded_file.name  
-                    st.session_state.video_title_translated = ""
-                    
                     file_ext = uploaded_file.name.split(".")[-1]
                     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     clean_name = safe_filename(uploaded_file.name.split(".")[0])
-                    
                     saved_path = f"temp_local_{timestamp}_{clean_name}.{file_ext}"
-                    with open(saved_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
+                    with open(saved_path, "wb") as f: f.write(uploaded_file.getbuffer())
                         
                     st.session_state.display_name = uploaded_file.name
-                    
                     if file_ext.lower() == "mp4":
                         st.session_state.video_path = saved_path
                         st.session_state.audio_path = saved_path.replace(".mp4", ".mp3")
@@ -278,10 +240,8 @@ if not st.session_state.processed:
                     st.session_state.processed = True
                     status_box.empty()
                     st.rerun()
-                except Exception as e:
-                    status_box.error(f"💥 本地解析出错！原因: {str(e)}")
-            else:
-                st.warning("⚠️ 请先选择一个有效的本地文件！")
+                except Exception as e: status_box.error(f"💥 出错！原因: {str(e)}")
+            else: st.warning("⚠️ 请先选择本地文件！")
 
 # --- 界面 2：结果工作台 ---
 else:
@@ -303,84 +263,29 @@ else:
     
     with col1:
         st.subheader("📦 工具与下载")
-        
-        # 1. 播放视频区域
         if st.session_state.video_path and os.path.exists(st.session_state.video_path):
-            v_side1, v_mid, v_side2 = st.columns([0.02, 0.96, 0.02])
-            with v_mid:
-                st.video(st.session_state.video_path)
-            st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
-            
-        # 🌟 2. 交互式多行自适应标题区（自动折行，右下角配有一键复制小图标）
-        st.markdown("<div style='margin-bottom: 4px; font-size: 14px;'><b>📌 视频标题信息（自动换行，点击右下角按钮一键复制）</b></div>", unsafe_allow_html=True)
-        
-        if not st.session_state.video_title_translated:
-            # 未翻译状态
-            st.text_area(
-                label="📄 完整原标题:", 
-                value=st.session_state.video_title_raw, 
-                height=95, 
-                key="copy_en_title_area"
-            )
-            
-            if st.button("🌐 翻译标题成中文", type="secondary", use_container_width=True):
-                if st.session_state.video_title_raw:
-                    try:
-                        with st.spinner("正在翻译..."):
-                            translated = GoogleTranslator(source='auto', target='zh-CN').translate(st.session_state.video_title_raw)
-                            st.session_state.video_title_translated = translated
-                            st.rerun()
-                    except:
-                        st.error("翻译失败，请重试")
-        else:
-            # 已翻译状态：两栏并排防挤压，支持独立复制
-            t_col1, t_col2 = st.columns(2)
-            with t_col1:
-                st.text_area(label="📄 完整原标题:", value=st.session_state.video_title_raw, height=95, key="copy_en_area_b")
-            with t_col2:
-                st.text_area(label="🇨🇳 中文翻译:", value=st.session_state.video_title_translated, height=95, key="copy_zh_area")
-            
-            # 动态按钮一键恢复
-            if st.button("🔙 恢复原本标题", type="secondary", use_container_width=True):
-                st.session_state.video_title_translated = ""
-                st.rerun()
-        
-        st.markdown("<div style='margin-top: 12px; margin-bottom: 4px; font-size: 14px;'><b>💾 资产一键导出</b></div>", unsafe_allow_html=True)
-
-        # 3. 资产下载按钮群
-        if st.session_state.video_path and os.path.exists(st.session_state.video_path):
-            with open(st.session_state.video_path, "rb") as vf:
-                st.download_button(
-                    label="📥 下载视频 (.mp4)", 
-                    data=vf, 
-                    file_name=st.session_state.display_name if st.session_state.display_name.endswith(".mp4") else st.session_state.display_name + ".mp4", 
-                    mime="video/mp4", 
-                    use_container_width=True
-                )
-            
-        if os.path.exists(st.session_state.audio_path):
-            with open(st.session_state.audio_path, "rb") as af:
-                st.download_button(
-                    label="🎵 下载音频 (.mp3)", 
-                    data=af, 
-                    file_name=st.session_state.display_name.split(".")[0] + ".mp3", 
-                    mime="audio/mp3", 
-                    use_container_width=True
-                )
+            v_side1, v_mid, v_side2 = st.columns([0.1, 0.8, 0.1])
+            with v_mid: st.video(st.session_state.video_path)
+            st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("**💾 资产一键导出**")
 
     with col2:
+        # 🌟 西班牙语（es）已经在这里对齐追加！
         lang_options = {
-            "简体中文": "zh-CN", "English (United States)": "en", "日本語": "ja", "Tiếng Việt": "vi", "Português (Brasil)": "pt"
+            "简体中文": "zh-CN",
+            "English (United States)": "en",
+            "Español (Spanish)": "es", # 👈 完美的西班牙语通道
+            "日本語": "ja",
+            "Tiếng Việt": "vi",
+            "Português (Brasil)": "pt"
         }
         
         header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
-        with header_col:
-            st.subheader("📄 交互式字幕工作区")
+        with header_col: st.subheader("📄 交互式字幕工作区")
         with select_col:
             target_lang_name = st.selectbox("选择目标语言", list(lang_options.keys()), label_visibility="collapsed")
             target_lang_code = lang_options[target_lang_name]
-        with toggle_col:
-            is_bilingual = st.toggle("双语对照", value=True)
+        with toggle_col: is_bilingual = st.toggle("双语对照", value=True)
             
         full_text_to_copy = ""
         translator = GoogleTranslator(source='auto', target=target_lang_code)
@@ -390,17 +295,14 @@ else:
             if target_lang_code != "en":
                 try: t_text = translator.translate(item["en"])
                 except: t_text = "[翻译失败]"
-            else:
-                t_text = ""
+            else: t_text = ""
                 
             rendered_subtitles.append({"en": item["en"], "trans": t_text, "start": item["start"], "end": item["end"]})
             
             if is_bilingual:
-                if target_lang_code != "en": full_text_to_copy += f"{item['en']}\n{t_text}\n\n"
-                else: full_text_to_copy += f"{item['en']}\n\n"
+                full_text_to_copy += f"{item['en']}\n{t_text}\n\n" if t_text else f"{item['en']}\n\n"
             else:
-                if target_lang_code == "en": full_text_to_copy += f"{item['en']}\n\n"
-                else: full_text_to_copy += f"{t_text}\n\n"
+                full_text_to_copy += f"{item['en']}\n\n" if target_lang_code == "en" else f"{t_text}\n\n"
 
         with copy_col:
             with st.popover("📋 复制文案", use_container_width=True):
@@ -416,22 +318,22 @@ else:
             current_srt_output += f"{idx}\n{srt_start} --> {srt_end}\n{srt_text}\n\n"
 
         with col1:
-            st.download_button(
-                label="📄 下载字幕 (.srt)",
-                data=current_srt_output,
-                file_name=st.session_state.display_name.split(".")[0] + f"_{target_lang_name}.srt",
-                mime="text/plain",
-                use_container_width=True
-            )
+            if st.session_state.video_path and os.path.exists(st.session_state.video_path):
+                with open(st.session_state.video_path, "rb") as vf:
+                    st.download_button(label="📥 下载视频 (.mp4)", data=vf, file_name=st.session_state.display_name if st.session_state.display_name.endswith(".mp4") else st.session_state.display_name + ".mp4", mime="video/mp4", use_container_width=True)
+            
+            if os.path.exists(st.session_state.audio_path):
+                with open(st.session_state.audio_path, "rb") as af:
+                    st.download_button(label="🎵 下载音频 (.mp3)", data=af, file_name=st.session_state.display_name.split(".")[0] + ".mp3", mime="audio/mp3", use_container_width=True)
+                    
+            st.download_button(label="📄 下载字幕 (.srt)", data=current_srt_output, file_name=st.session_state.display_name.split(".")[0] + f"_{target_lang_name}.srt", mime="text/plain", use_container_width=True)
 
         st.markdown("---")
         
         with st.container(height=520):
             for sub in rendered_subtitles:
                 sub_col_time, sub_col_text = st.columns([1, 4])
-                with sub_col_time:
-                    st.markdown(f'<div class="time-badge">{sub["start"]}-{sub["end"]}</div>', unsafe_allow_html=True)
-                    
+                with sub_col_time: st.markdown(f'<div class="time-badge">{sub["start"]}-{sub["end"]}</div>', unsafe_allow_html=True)
                 with sub_col_text:
                     if is_bilingual:
                         st.markdown(f'<div class="en-text">{sub["en"]}</div>', unsafe_allow_html=True)
@@ -439,5 +341,4 @@ else:
                     else:
                         if target_lang_code == "en": st.markdown(f'<div class="en-text">{sub["en"]}</div>', unsafe_allow_html=True)
                         else: st.markdown(f'<div class="en-text">{sub["trans"]}</div>', unsafe_allow_html=True)
-                            
                     st.markdown('<div class="sub-divider"></div>', unsafe_allow_html=True)
