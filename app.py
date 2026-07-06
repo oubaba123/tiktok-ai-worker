@@ -6,10 +6,10 @@ import glob
 import urllib.request
 from yt_dlp import YoutubeDL
 from faster_whisper import WhisperModel
-from deep_translator import DeeplTranslator, GoogleTranslator  # 🌟 引入两套翻译器做无缝兜底
+from deep_translator import DeeplTranslator, GoogleTranslator  
 
 # 设置宽屏模式
-st.set_page_config(page_title="TikTok AI 视频字幕工作台 (DeepL免卡版)", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="TikTok AI 视频字幕工作台 (DeepL免卡全对齐版)", page_icon="🎬", layout="wide")
 
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
@@ -225,7 +225,7 @@ if not st.session_state.processed:
         uploaded_file = st.file_uploader("请选择本地视频/音频文件：", type=["mp4", "mp3", "m4a", "wav"])
         if st.button("🚀 开始智能提取本地文件", type="primary"):
             if uploaded_file:
-                status_box = st.info("正在将文件载入内存...")
+                status_box = st.info("正在将 file 载入内存...")
                 try:
                     auto_cleanup_old_files()
                     file_ext = uploaded_file.name.split(".")[-1]
@@ -251,7 +251,7 @@ if not st.session_state.processed:
                     status_box.empty()
                     st.rerun()
                 except Exception as e: status_box.error(f"💥 出错！原因: {str(e)}")
-            else: st.warning("⚠️ 请先选择本地 file！")
+            else: st.warning("⚠️ 请先选择本地文件！")
 
 # --- 界面 2：结果工作台 ---
 else:
@@ -280,52 +280,54 @@ else:
         st.markdown("**💾 资产一键导出**")
 
     with col2:
-        lang_options = {
-            "简体中文": "zh",
-            "English (United States)": "en",
-            "Español (Spanish)": "es", 
-            "日本語": "ja",
-            "Tiếng Việt": "zh", 
-            "Português (Brasil)": "pt"
+        # 🌟 核心对齐配置字典
+        # 为了万无一失，DeepL使用标准缩写；如果兜底转入谷歌，利用自动转义全称函数兼容
+        lang_config = {
+            "简体中文": {"deepl": "zh", "google": "chinese (simplified)"},
+            "English (United States)": {"deepl": "en", "google": "english"},
+            "Español (Spanish)": {"deepl": "es", "google": "spanish"}, 
+            "日本語": {"deepl": "ja", "google": "japanese"},
+            "Tiếng Việt": {"deepl": "zh", "google": "chinese (simplified)"}, # 越南语兜底退回中文
+            "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
         header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
         with header_col: st.subheader("📄 交互式字幕工作区")
         with select_col:
-            target_lang_name = st.selectbox("选择目标语言", list(lang_options.keys()), label_visibility="collapsed")
-            target_lang_code = lang_options[target_lang_name]
+            target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
+            deepl_code = lang_config[target_lang_name]["deepl"]
+            google_code = lang_config[target_lang_name]["google"]
         with toggle_col: is_bilingual = st.toggle("双语对照", value=True)
             
         full_text_to_copy = ""
         
-        # 🌟 完美的免密双方案高保真初始化（彻底解决 ApiKeyException 缩进陷阱）
+        # 🌟 双重翻译器安全门禁初始化
         use_google_fallback = False
         try:
-            translator = DeeplTranslator(source='auto', target=target_lang_code, use_free_api=True)
+            translator = DeeplTranslator(source='auto', target=deepl_code, use_free_api=True)
         except:
-            translator = GoogleTranslator(source='auto', target=target_lang_code)
+            # 如果 DeepL 初始化或者网页端握手失败，立刻激活 Google 官方纯文本全称兼容机制
+            translator = GoogleTranslator(source='auto', target=google_code)
             use_google_fallback = True
         
         rendered_subtitles = []
         for item in st.session_state.raw_results:
             current_raw_lang = st.session_state.detected_lang.lower()
             
-            if target_lang_code == current_raw_lang:
+            # 判同逻辑：如果当前的国家代码前半段吻合（比如 es == es），则直接跳过翻译
+            if deepl_code.split('-')[0] == current_raw_lang:
                 t_text = ""
             else:
                 if item["raw_text"]:
                     try:
-                        if use_google_fallback:
-                            t_text = translator.translate(item["raw_text"])
-                        else:
-                            t_text = translator.translate(item["raw_text"])
+                        t_text = translator.translate(item["raw_text"])
                     except:
-                        # 最终底线：如果 DeepL 连环被墙，原地切换到谷歌完成单行救援
                         try:
-                            emergency_trans = GoogleTranslator(source='auto', target=target_lang_code)
+                            # 终极单行救援：当 DeepL 中途断流或限速时，临时召唤谷歌用最稳全称完成这一行
+                            emergency_trans = GoogleTranslator(source='auto', target=google_code)
                             t_text = emergency_trans.translate(item["raw_text"])
                         except:
-                            t_text = "[翻译超时，请稍后刷新]"
+                            t_text = "[翻译超时，请稍后重试]"
                 else:
                     t_text = ""
                 
