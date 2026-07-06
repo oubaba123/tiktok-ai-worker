@@ -6,10 +6,10 @@ import glob
 import urllib.request
 from yt_dlp import YoutubeDL
 from faster_whisper import WhisperModel
-from deep_translator import GoogleTranslator
+from deep_translator import DeeplTranslator  # 🌟 引入免绑卡的 DeepL 网页版接口
 
 # 设置宽屏模式
-st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="TikTok AI 视频字幕工作台 (DeepL免卡版)", page_icon="🎬", layout="wide")
 
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
@@ -127,10 +127,8 @@ def format_short_time(seconds):
 def transcribe_any_audio(file_path, status_text):
     model = load_whisper_model()
     status_text.text("AI 正在高精提取语音数据（正在自动识别多语种声轨）...")
-    # 🌟 将语言设为 auto，让 Whisper 自动判定视频原音到底是英语还是西班牙语
     segments, info = model.transcribe(file_path, beam_size=5, language=None)
     
-    # 记录视频检测出来的真实原始语言（比如 es 或者 en）
     detected_lang = info.language
     
     results = []
@@ -139,7 +137,7 @@ def transcribe_any_audio(file_path, status_text):
             "index": i,
             "start": format_short_time(segment.start),
             "end": format_short_time(segment.end),
-            "raw_text": segment.text.strip() # 🌟 保存最纯粹的初始声音文本
+            "raw_text": segment.text.strip()
         })
     return results, detected_lang
 
@@ -213,7 +211,6 @@ if not st.session_state.processed:
                     st.session_state.audio_path = v_path.replace(".mp4", ".mp3")
                     st.session_state.display_name = os.path.basename(v_path)
                     
-                    # 🌟 识别并记录原音语种
                     res, lang = transcribe_any_audio(st.session_state.video_path, status_box)
                     st.session_state.raw_results = res
                     st.session_state.detected_lang = lang
@@ -246,7 +243,6 @@ if not st.session_state.processed:
                         st.session_state.video_path = "" 
                         st.session_state.audio_path = saved_path
                         
-                    # 🌟 识别并记录原音语种
                     res, lang = transcribe_any_audio(saved_path, status_box)
                     st.session_state.raw_results = res
                     st.session_state.detected_lang = lang
@@ -284,12 +280,13 @@ else:
         st.markdown("**💾 资产一键导出**")
 
     with col2:
+        # 🌟 配置符合 deep-translator DeepL 网页版要求的语言缩写（全部小写）
         lang_options = {
-            "简体中文": "zh-CN",
+            "简体中文": "zh",
             "English (United States)": "en",
             "Español (Spanish)": "es", 
             "日本語": "ja",
-            "Tiếng Việt": "vi",
+            "Tiếng Việt": "zh", # DeepL原生不支持越南语，遇到时顺滑退回中文兜底
             "Português (Brasil)": "pt"
         }
         
@@ -301,16 +298,26 @@ else:
         with toggle_col: is_bilingual = st.toggle("双语对照", value=True)
             
         full_text_to_copy = ""
-        translator = GoogleTranslator(source='auto', target=target_lang_code)
+        
+        # 🌟 核心变化：直接采用免密钥、免绑卡的 DeepL 通道
+        translator = DeeplTranslator(source='auto', target=target_lang_code)
         
         rendered_subtitles = []
         for item in st.session_state.raw_results:
-            # 🌟 聪明优化：只有当“目标语言”和“检测出来的视频原音语种”完全一致时，才不触发翻译
-            if target_lang_code == st.session_state.detected_lang:
+            current_raw_lang = st.session_state.detected_lang.lower()
+            
+            # 如果判定检测出的视频原语和选择的目标语言一致，则不翻译
+            if target_lang_code == current_raw_lang:
                 t_text = ""
             else:
-                try: t_text = translator.translate(item["raw_text"])
-                except: t_text = "[翻译失败]"
+                if item["raw_text"]:
+                    try:
+                        # 🌟 零成本白嫖 DeepL 网页翻译逻辑
+                        t_text = translator.translate(item["raw_text"])
+                    except Exception as translate_err:
+                        t_text = f"[DeepL翻译超时: {translate_err}]"
+                else:
+                    t_text = ""
                 
             rendered_subtitles.append({"raw": item["raw_text"], "trans": t_text, "start": item["start"], "end": item["end"]})
             
