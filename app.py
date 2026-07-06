@@ -37,13 +37,6 @@ st.markdown("""
         border-bottom: 1px dashed #eef2f6;
         margin-bottom: 12px;
     }
-    /* 自定义美化文本显示框 */
-    .custom-title-label {
-        font-size: 13px;
-        font-weight: bold;
-        color: #333333;
-        margin-bottom: 2px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -137,14 +130,13 @@ def download_tk_video(video_url, status_text):
     with YoutubeDL(network_retry_opts) as ydl:
         info_dict = ydl.extract_info(video_url, download=False)
         
-        # 🌟 核心升级：尝试从多个备用字段捞取无损全文本。TikTok 有时把全称藏在 title 或纯描述里
+        # 🌟 捞取多重备用字段，防止 TikTok 局部 API 截断标题文案
         possible_titles = [
             info_dict.get('title'),
             info_dict.get('description'),
             info_dict.get('fulltitle')
         ]
         
-        # 过滤掉空的，拿到最长、最没有被截断的那一个
         valid_titles = [t for t in possible_titles if t and "..." not in t]
         if valid_titles:
             full_title = valid_titles[0]
@@ -188,7 +180,7 @@ def format_short_time(seconds):
 
 def transcribe_only_en(file_path, status_text):
     model = load_whisper_model()
-    status_text.text("AI 正在高精提取语音数据...")
+    status_text.text("AI 正在高精提取语音 data...")
     segments, _ = model.transcribe(file_path, beam_size=5)
     
     results = []
@@ -319,12 +311,17 @@ else:
                 st.video(st.session_state.video_path)
             st.markdown("<div style='margin-bottom: 5px;'></div>", unsafe_allow_html=True)
             
-        # 🌟 2. 交互式标题：自带原生一键复制功能，自动换行，永不截断
-        st.markdown("<div style='margin-bottom: 4px; font-size: 14px;'><b>📌 视频标题与复制</b></div>", unsafe_allow_html=True)
+        # 🌟 2. 交互式多行自适应标题区（自动折行，右下角配有一键复制小图标）
+        st.markdown("<div style='margin-bottom: 4px; font-size: 14px;'><b>📌 视频标题信息（自动换行，点击右下角按钮一键复制）</b></div>", unsafe_allow_html=True)
         
         if not st.session_state.video_title_translated:
-            # 未翻译状态：使用文本框，自带原生复制按钮，且完美自动换行
-            st.text_input(label="📄 完整原标题（右侧按钮可一键复制）:", value=st.session_state.video_title_raw, key="copy_en_title")
+            # 未翻译状态
+            st.text_area(
+                label="📄 完整原标题:", 
+                value=st.session_state.video_title_raw, 
+                height=95, 
+                key="copy_en_title_area"
+            )
             
             if st.button("🌐 翻译标题成中文", type="secondary", use_container_width=True):
                 if st.session_state.video_title_raw:
@@ -336,14 +333,14 @@ else:
                     except:
                         st.error("翻译失败，请重试")
         else:
-            # 已翻译状态：两栏并排，各自配备原生一键复制栏
+            # 已翻译状态：两栏并排防挤压，支持独立复制
             t_col1, t_col2 = st.columns(2)
             with t_col1:
-                st.text_input(label="📄 完整原标题:", value=st.session_state.video_title_raw, key="copy_en_title_b")
+                st.text_area(label="📄 完整原标题:", value=st.session_state.video_title_raw, height=95, key="copy_en_area_b")
             with t_col2:
-                st.text_input(label="🇨🇳 中文翻译:", value=st.session_state.video_title_translated, key="copy_zh_title")
+                st.text_area(label="🇨🇳 中文翻译:", value=st.session_state.video_title_translated, height=95, key="copy_zh_area")
             
-            # 按钮转换为一键恢复
+            # 动态按钮一键恢复
             if st.button("🔙 恢复原本标题", type="secondary", use_container_width=True):
                 st.session_state.video_title_translated = ""
                 st.rerun()
