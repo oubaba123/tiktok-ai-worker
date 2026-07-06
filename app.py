@@ -6,7 +6,7 @@ import glob
 import urllib.request
 from yt_dlp import YoutubeDL
 from faster_whisper import WhisperModel
-from deep_translator import DeeplTranslator  # 🌟 引入免绑卡的 DeepL 网页版接口
+from deep_translator import DeeplTranslator, GoogleTranslator  # 🌟 引入两套翻译器做无缝兜底
 
 # 设置宽屏模式
 st.set_page_config(page_title="TikTok AI 视频字幕工作台 (DeepL免卡版)", page_icon="🎬", layout="wide")
@@ -251,7 +251,7 @@ if not st.session_state.processed:
                     status_box.empty()
                     st.rerun()
                 except Exception as e: status_box.error(f"💥 出错！原因: {str(e)}")
-            else: st.warning("⚠️ 请先选择本地文件！")
+            else: st.warning("⚠️ 请先选择本地 file！")
 
 # --- 界面 2：结果工作台 ---
 else:
@@ -280,13 +280,12 @@ else:
         st.markdown("**💾 资产一键导出**")
 
     with col2:
-        # 🌟 配置符合 deep-translator DeepL 网页版要求的语言缩写（全部小写）
         lang_options = {
             "简体中文": "zh",
             "English (United States)": "en",
             "Español (Spanish)": "es", 
             "日本語": "ja",
-            "Tiếng Việt": "zh", # DeepL原生不支持越南语，遇到时顺滑退回中文兜底
+            "Tiếng Việt": "zh", 
             "Português (Brasil)": "pt"
         }
         
@@ -299,29 +298,34 @@ else:
             
         full_text_to_copy = ""
         
-        # 🌟 核心变化：直接采用免密钥、免绑卡的 DeepL 通道
-        # 🌟 修改为明确指定不使用官方付费 Key，而是透传网页白嫖模式
-try:
-    translator = DeeplTranslator(source='auto', target=target_lang_code, use_free_api=True)
-except:
-    # 备用方案：如果上面还卡，直接换用该库专门的免密网页抓取模式
-    from deep_translator import GoogleTranslator
-    translator = GoogleTranslator(source='auto', target=target_lang_code)
+        # 🌟 完美的免密双方案高保真初始化（彻底解决 ApiKeyException 缩进陷阱）
+        use_google_fallback = False
+        try:
+            translator = DeeplTranslator(source='auto', target=target_lang_code, use_free_api=True)
+        except:
+            translator = GoogleTranslator(source='auto', target=target_lang_code)
+            use_google_fallback = True
         
         rendered_subtitles = []
         for item in st.session_state.raw_results:
             current_raw_lang = st.session_state.detected_lang.lower()
             
-            # 如果判定检测出的视频原语和选择的目标语言一致，则不翻译
             if target_lang_code == current_raw_lang:
                 t_text = ""
             else:
                 if item["raw_text"]:
                     try:
-                        # 🌟 零成本白嫖 DeepL 网页翻译逻辑
-                        t_text = translator.translate(item["raw_text"])
-                    except Exception as translate_err:
-                        t_text = f"[DeepL翻译超时: {translate_err}]"
+                        if use_google_fallback:
+                            t_text = translator.translate(item["raw_text"])
+                        else:
+                            t_text = translator.translate(item["raw_text"])
+                    except:
+                        # 最终底线：如果 DeepL 连环被墙，原地切换到谷歌完成单行救援
+                        try:
+                            emergency_trans = GoogleTranslator(source='auto', target=target_lang_code)
+                            t_text = emergency_trans.translate(item["raw_text"])
+                        except:
+                            t_text = "[翻译超时，请稍后刷新]"
                 else:
                     t_text = ""
                 
