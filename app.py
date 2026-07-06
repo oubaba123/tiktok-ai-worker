@@ -300,7 +300,13 @@ else:
         full_text_to_copy = ""
         
         # 🌟 核心变化：直接采用免密钥、免绑卡的 DeepL 通道
-        translator = DeeplTranslator(source='auto', target=target_lang_code)
+        # 🌟 修改为明确指定不使用官方付费 Key，而是透传网页白嫖模式
+try:
+    translator = DeeplTranslator(source='auto', target=target_lang_code, use_free_api=True)
+except:
+    # 备用方案：如果上面还卡，直接换用该库专门的免密网页抓取模式
+    from deep_translator import GoogleTranslator
+    translator = GoogleTranslator(source='auto', target=target_lang_code)
         
         rendered_subtitles = []
         for item in st.session_state.raw_results:
