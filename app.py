@@ -225,7 +225,7 @@ if not st.session_state.processed:
         uploaded_file = st.file_uploader("请选择本地视频/音频文件：", type=["mp4", "mp3", "m4a", "wav"])
         if st.button("🚀 开始智能提取本地文件", type="primary"):
             if uploaded_file:
-                status_box = st.info("正在将 file 载入内存...")
+                status_box = st.info("正在将文件载入内存...")
                 try:
                     auto_cleanup_old_files()
                     file_ext = uploaded_file.name.split(".")[-1]
@@ -280,14 +280,12 @@ else:
         st.markdown("**💾 资产一键导出**")
 
     with col2:
-        # 🌟 核心对齐配置字典
-        # 为了万无一失，DeepL使用标准缩写；如果兜底转入谷歌，利用自动转义全称函数兼容
         lang_config = {
             "简体中文": {"deepl": "zh", "google": "chinese (simplified)"},
             "English (United States)": {"deepl": "en", "google": "english"},
             "Español (Spanish)": {"deepl": "es", "google": "spanish"}, 
             "日本語": {"deepl": "ja", "google": "japanese"},
-            "Tiếng Việt": {"deepl": "zh", "google": "chinese (simplified)"}, # 越南语兜底退回中文
+            "Tiếng Việt": {"deepl": "zh", "google": "chinese (simplified)"}, 
             "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
@@ -301,12 +299,10 @@ else:
             
         full_text_to_copy = ""
         
-        # 🌟 双重翻译器安全门禁初始化
         use_google_fallback = False
         try:
             translator = DeeplTranslator(source='auto', target=deepl_code, use_free_api=True)
         except:
-            # 如果 DeepL 初始化或者网页端握手失败，立刻激活 Google 官方纯文本全称兼容机制
             translator = GoogleTranslator(source='auto', target=google_code)
             use_google_fallback = True
         
@@ -314,7 +310,6 @@ else:
         for item in st.session_state.raw_results:
             current_raw_lang = st.session_state.detected_lang.lower()
             
-            # 判同逻辑：如果当前的国家代码前半段吻合（比如 es == es），则直接跳过翻译
             if deepl_code.split('-')[0] == current_raw_lang:
                 t_text = ""
             else:
@@ -323,7 +318,6 @@ else:
                         t_text = translator.translate(item["raw_text"])
                     except:
                         try:
-                            # 终极单行救援：当 DeepL 中途断流或限速时，临时召唤谷歌用最稳全称完成这一行
                             emergency_trans = GoogleTranslator(source='auto', target=google_code)
                             t_text = emergency_trans.translate(item["raw_text"])
                         except:
@@ -333,10 +327,11 @@ else:
                 
             rendered_subtitles.append({"raw": item["raw_text"], "trans": t_text, "start": item["start"], "end": item["end"]})
             
+            # 🌟 核心改进：去除每句之间多余的额外空行，完美紧凑换行
             if is_bilingual:
-                full_text_to_copy += f"{item['raw_text']}\n{t_text}\n\n" if t_text else f"{item['raw_text']}\n\n"
+                full_text_to_copy += f"{item['raw_text']}\n{t_text}\n" if t_text else f"{item['raw_text']}\n"
             else:
-                full_text_to_copy += f"{item['raw_text']}\n\n" if not t_text else f"{t_text}\n\n"
+                full_text_to_copy += f"{item['raw_text']}\n" if not t_text else f"{t_text}\n"
 
         with copy_col:
             with st.popover("📋 复制文案", use_container_width=True):
