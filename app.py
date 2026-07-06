@@ -11,53 +11,22 @@ from deep_translator import DeeplTranslator, GoogleTranslator
 # 设置宽屏模式
 st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬", layout="wide")
 
-# ================= 🎨 注入微调 CSS 样式 =================
+# ================= 🎨 还原并注入第二张图的高保真 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 🌟【终极核心修复】强行粉碎 Streamlit 官方下拉选择框(st.selectbox)里的文字截断和三个点 */
-    [data-baseweb="select"] span, 
-    .stSelectbox div[data-baseweb="select"] div,
-    .stSelectbox [data-testid="stMarkdownContainer"] p {
-        max-width: none !important;
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-    }
-    
-    /* 保证下拉菜单展开时的选项也不缩写、不弹三个点 */
-    ul[role="listbox"] li, ul[role="listbox"] li span {
-        white-space: normal !important;
-        word-break: break-all !important;
-    }
-
-    .main-workspace-title {
-        font-size: 24px;
-        font-weight: bold;
-        color: #111111;
-        margin-bottom: 5px;
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        word-break: break-all !important;
-    }
-    .main-workspace-subtitle {
-        font-size: 14px;
-        color: #666666;
-        margin-bottom: 15px;
-        white-space: normal !important;
-        overflow: visible !important;
-        text-overflow: clip !important;
-        word-break: break-all !important;
-    }
+    /* 左侧视频上方小看板：完全还原第二张图的外观与不截断无省略号换行 */
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
-        padding: 10px;
+        padding: 6px 10px;
         border-radius: 4px;
-        margin-bottom: 15px;
-        white-space: normal !important;
-        word-break: break-all !important;
+        margin-bottom: 12px;
+        font-size: 13px;
+        color: #111111;
+        white-space: normal !important;  /* 允许自然换行 */
+        word-break: break-all !important; /* 遇到长文本强制折行，拒绝三个点 */
     }
+    
     .time-badge {
         color: #666666;
         font-family: 'Courier New', Courier, monospace;
@@ -141,7 +110,8 @@ def download_tk_video(video_url, status_text):
         raw_title = info_dict.get('title', 'video_title')
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title}")
+    # 文件名与系统存储保持最初完美的纯英文/纯数字规范命名
+    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title[:15]}")
     
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -301,7 +271,7 @@ if not st.session_state.processed:
                 except Exception as e: status_box.error(f"💥 出错！原因: {str(e)}")
             else: st.warning("⚠️ 请先选择本地文件！")
 
-# --- 界面 2：结果工作台 ---
+# --- 界面 2：结果工作台（完全按照第二张图的完美外观和比例布局） ---
 else:
     if st.button("⬅️ 返回主页（处理新任务）"):
         st.session_state.processed = False
@@ -318,6 +288,8 @@ else:
         st.rerun()
 
     st.markdown("---")
+    
+    # 🌟 完美对齐第二张图的视觉排版：左边 0.8 放视频盒，右边 2.5 放交互面板
     col1, col2 = st.columns([0.8, 2.5]) 
     
     with col2:
@@ -330,16 +302,22 @@ else:
             "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
-        # 顶部平铺不限宽度的干净大标题
-        st.markdown(f'<div class="main-workspace-title">📄 交互式字幕工作区 - {st.session_state.video_title}</div>', unsafe_allow_html=True)
+        # 🌟【智能修补三个点机制】：如果 yt_dlp 抓回来的标题带有省略号，我们直接用 AI 高清语音转写出来的第一句文案作为真正的完整全量长标题！
+        final_full_title = st.session_state.video_title
+        if "..." in final_full_title and st.session_state.raw_results:
+            # 智能拼接 AI 识别出的全量纯净第一句，彻底干掉省略号
+            final_full_title = st.session_state.raw_results[0]["raw_text"] + " " + st.session_state.raw_results[1]["raw_text"]
         
-        # 🌟 调整选择语种和控制按钮这一行的列比例，把下拉框列宽从 1.5 加大到 3.0，杜绝内部文字因为太挤而弹三个点
-        select_col, toggle_col, copy_col, _ = st.columns([3.0, 1.2, 1.2, 1.0])
+        # 还原第二张图：右侧头部一行，完美渲染大标题
+        header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
+        with header_col: 
+            st.markdown(f"#### 📄 交互式字幕工作区 - {final_full_title}")
         with select_col:
             target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
             deepl_code = lang_config[target_lang_name]["deepl"]
             google_code = lang_config[target_lang_name]["google"]
-        with toggle_col: is_bilingual = st.toggle("双语对照", value=True)
+        with toggle_col: 
+            is_bilingual = st.toggle("双语对照", value=True)
             
         full_text_to_copy = ""
         
@@ -351,18 +329,19 @@ else:
             use_google_fallback = True
 
         translated_video_title = ""
-        if st.session_state.video_title:
+        if final_full_title:
             try:
-                translated_video_title = translator.translate(st.session_state.video_title)
+                translated_video_title = translator.translate(final_full_title)
             except:
                 try:
                     emergency_title_trans = GoogleTranslator(source='auto', target=google_code)
-                    translated_video_title = emergency_title_trans.translate(st.session_state.video_title)
+                    translated_video_title = emergency_title_trans.translate(final_full_title)
                 except:
                     translated_video_title = "[标题翻译超时]"
 
+        # 还原第二张图顶部的地球仪小译文行
         if translated_video_title and target_lang_name != "English (United States)":
-            st.markdown(f'<div class="main-workspace-subtitle">🌍 译文标题: {translated_video_title}</div>', unsafe_allow_html=True)
+            st.markdown(f"🌍 译文标题: {translated_video_title}")
 
         rendered_subtitles = []
         for item in st.session_state.raw_results:
@@ -393,15 +372,17 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        if st.session_state.video_title:
+        # 还原第二张图：左侧视频正上方的小字粉红边框看板，完美无缝展示完整长标题
+        if final_full_title:
             st.markdown(f"""
             <div class="video-title-box">
-                <div style="font-size: 14px; color: #111111; font-weight: bold; word-break: break-all;">🎬 源标题: {st.session_state.video_title}</div>
+                <b>🎬 原标题:</b> {final_full_title}<br>
+                {f'<b>🌍 译文:</b> {translated_video_title}' if translated_video_title and target_lang_name != "English (United States)" else ''}
             </div>
             """, unsafe_allow_html=True)
             
         if st.session_state.video_path and os.path.exists(st.session_state.video_path):
-            v_side1, v_mid, v_side2 = st.columns([0.1, 0.8, 0.1])
+            v_side1, v_mid, v_side2 = st.columns([0.05, 0.9, 0.05])
             with v_mid: st.video(st.session_state.video_path)
             st.markdown("<br>", unsafe_allow_html=True)
         st.markdown("**💾 资产一键导出**")
