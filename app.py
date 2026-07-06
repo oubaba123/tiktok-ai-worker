@@ -14,17 +14,18 @@ st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 左侧视频上方小看板样式 - 允许长标题和#标签自动折行完整显示 */
+    /* 左侧视频上方小看板样式 - 允许超长标题和所有#标签完完整整地自动折行，拒绝任何三个点 */
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
-        padding: 6px 10px;
+        padding: 8px 12px;
         border-radius: 4px;
         margin-bottom: 12px;
         font-size: 13px;
         color: #111111;
         white-space: normal !important;  
-        word-break: break-all !important; 
+        word-break: break-word !important; 
+        line-height: 1.5;
     }
     
     .time-badge {
@@ -107,7 +108,12 @@ def download_tk_video(video_url, status_text):
         info_dict = ydl.extract_info(video_url, download=False)
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
-        raw_title = info_dict.get('title', 'video_title')
+        
+        # 🌟【核心突破】：TikTok 真正的无截断全量标题和所有#号标签都完整保留在 description 字段中
+        raw_title = info_dict.get('description') or info_dict.get('title') or 'video_title'
+        # 清洗掉一些可能导致换行乱套的异常控制字符，保留干净的文本和标签
+        raw_title = raw_title.replace('\n', ' ').strip()
+        
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title[:15]}")
@@ -300,7 +306,6 @@ else:
             "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
-        # 🌟【核心修复逻辑】：彻底删除上一轮用AI拼接文案的魔改，直接拿回作者发布的带#标签的原生完整标题
         final_full_title = st.session_state.video_title
         
         # 完美的右侧极简纯净大标题（完美对齐第二张图）
@@ -368,7 +373,7 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 🌟 左侧小看板：同样完美呈现原作者最完整带有带有 `#标签` 流量标记的视频文案，并支持自动换行
+        # 左侧小看板：完美呈现原作者全量带#标签的视频文案，并支持自动换行
         if final_full_title:
             st.markdown(f"""
             <div class="video-title-box">
