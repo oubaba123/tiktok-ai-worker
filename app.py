@@ -324,7 +324,7 @@ else:
         
         if not st.session_state.video_title_translated:
             # 未翻译状态：使用文本框，自带原生复制按钮，且完美自动换行
-            st.text_copy_ some_text = st.text_input(label="📄 完整原标题（右侧按钮可一键复制）:", value=st.session_state.video_title_raw, key="copy_en_title")
+            st.text_input(label="📄 完整原标题（右侧按钮可一键复制）:", value=st.session_state.video_title_raw, key="copy_en_title")
             
             if st.button("🌐 翻译标题成中文", type="secondary", use_container_width=True):
                 if st.session_state.video_title_raw:
