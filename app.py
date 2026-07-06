@@ -11,10 +11,10 @@ from deep_translator import DeeplTranslator, GoogleTranslator
 # 设置宽屏模式
 st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬", layout="wide")
 
-# ================= 🎨 还原并注入第二张图的高保真 CSS 样式 =================
+# ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 左侧视频上方小看板：完全还原第二张图的外观与不截断无省略号换行 */
+    /* 左侧视频上方小看板样式 */
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
@@ -23,8 +23,8 @@ st.markdown("""
         margin-bottom: 12px;
         font-size: 13px;
         color: #111111;
-        white-space: normal !important;  /* 允许自然换行 */
-        word-break: break-all !important; /* 遇到长文本强制折行，拒绝三个点 */
+        white-space: normal !important;  
+        word-break: break-all !important; 
     }
     
     .time-badge {
@@ -110,7 +110,6 @@ def download_tk_video(video_url, status_text):
         raw_title = info_dict.get('title', 'video_title')
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    # 文件名与系统存储保持最初完美的纯英文/纯数字规范命名
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title[:15]}")
     
     ydl_opts = {
@@ -271,7 +270,7 @@ if not st.session_state.processed:
                 except Exception as e: status_box.error(f"💥 出错！原因: {str(e)}")
             else: st.warning("⚠️ 请先选择本地文件！")
 
-# --- 界面 2：结果工作台（完全按照第二张图的完美外观和比例布局） ---
+# --- 界面 2：结果工作台 ---
 else:
     if st.button("⬅️ 返回主页（处理新任务）"):
         st.session_state.processed = False
@@ -289,7 +288,6 @@ else:
 
     st.markdown("---")
     
-    # 🌟 完美对齐第二张图的视觉排版：左边 0.8 放视频盒，右边 2.5 放交互面板
     col1, col2 = st.columns([0.8, 2.5]) 
     
     with col2:
@@ -302,16 +300,15 @@ else:
             "Português (Brasil)": {"deepl": "pt", "google": "portuguese"}
         }
         
-        # 🌟【智能修补三个点机制】：如果 yt_dlp 抓回来的标题带有省略号，我们直接用 AI 高清语音转写出来的第一句文案作为真正的完整全量长标题！
+        # 补全可能带有省略号的短原名标题
         final_full_title = st.session_state.video_title
         if "..." in final_full_title and st.session_state.raw_results:
-            # 智能拼接 AI 识别出的全量纯净第一句，彻底干掉省略号
             final_full_title = st.session_state.raw_results[0]["raw_text"] + " " + st.session_state.raw_results[1]["raw_text"]
         
-        # 还原第二张图：右侧头部一行，完美渲染大标题
+        # 🌟【改动点】：彻底精简大标题，后面不再拼接长文本尾巴
         header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
         with header_col: 
-            st.markdown(f"#### 📄 交互式字幕工作区 - {final_full_title}")
+            st.markdown("#### 📄 交互式字幕工作区") # 👈 纯净大标题
         with select_col:
             target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
             deepl_code = lang_config[target_lang_name]["deepl"]
@@ -339,7 +336,7 @@ else:
                 except:
                     translated_video_title = "[标题翻译超时]"
 
-        # 还原第二张图顶部的地球仪小译文行
+        # 🌟【改动点】：下拉框下面的小字地球仪行，同步变为纯净版的译文标题显示，不再有多余小尾巴
         if translated_video_title and target_lang_name != "English (United States)":
             st.markdown(f"🌍 译文标题: {translated_video_title}")
 
@@ -362,7 +359,8 @@ else:
                 else:
                     t_text = ""
                 
-            rendered_subtitles.append({"raw": item["raw_text"], "trans": t_text, "start": item["start"], "end": item["end"]})
+            rendered_subnotes = {"raw": item["raw_text"], "trans": t_text, "start": item["start"], "end": item["end"]}
+            rendered_subtitles.append(rendered_subnotes)
             
             if is_bilingual:
                 full_text_to_copy += f"{item['raw_text']}\n{t_text}\n" if t_text else f"{item['raw_text']}\n"
@@ -372,7 +370,7 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 还原第二张图：左侧视频正上方的小字粉红边框看板，完美无缝展示完整长标题
+        # 左侧保留高保真、完全不限制宽度的独立标题展示看板（带自动换行）
         if final_full_title:
             st.markdown(f"""
             <div class="video-title-box">
