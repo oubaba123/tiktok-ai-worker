@@ -112,11 +112,10 @@ def download_tk_video(video_url, status_text):
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
         raw_title = info_dict.get('title', 'video_title')
-        title_short = raw_title[:20]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
-    # 🌟 恢复最初完美的连贯数字规范命名：20260705_ankerofficial_7644772064880069902_Anker_New...
-    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{title_short}")
+    # 🌟 彻底移除了这里的截断限制，保留最完整的原生标题作为文件名
+    custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title}")
     
     ydl_opts = {
         'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
@@ -322,7 +321,6 @@ else:
             translator = GoogleTranslator(source='auto', target=google_code)
             use_google_fallback = True
 
-        # 🌟 核心升级：对视频总标题执行同步热翻译
         translated_video_title = ""
         if st.session_state.video_title:
             try:
@@ -363,12 +361,12 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 🌟 核心改进：在左侧视频上方渲染“高保真完整的全量源标题+同步语种热翻译”
+        # 🌟 这里的 CSS 限制也被彻底去除了，现在长标题会自动换行完整展示，绝不漏掉一个字
         if st.session_state.video_title:
             st.markdown(f"""
             <div class="video-title-box">
-                <div class="video-title-main">🎬 原标题: {st.session_state.video_title}</div>
-                {f'<div class="video-title-trans">🌍 译文: {translated_video_title}</div>' if translated_video_title and target_lang_name != "English (United States)" else ''}
+                <div style="font-size: 15px; color: #111111; font-weight: bold; word-break: break-all;">🎬 原标题: {st.session_state.video_title}</div>
+                {f'<div class="video-title-trans" style="word-break: break-all;">🌍 译文: {translated_video_title}</div>' if translated_video_title and target_lang_name != "English (United States)" else ''}
             </div>
             """, unsafe_allow_html=True)
             
