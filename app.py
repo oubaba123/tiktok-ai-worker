@@ -9,19 +9,27 @@ from faster_whisper import WhisperModel
 from deep_translator import DeeplTranslator, GoogleTranslator  
 
 # 设置宽屏模式
-st.set_page_config(page_title="TikTok AI 视频字幕工作台 (DeepL免卡完美版)", page_icon="🎬", layout="wide")
+st.set_page_config(page_title="TikTok AI 视频字幕工作台 (带标题同步翻译版)", page_icon="🎬", layout="wide")
 
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    .video-title-text {
+    .video-title-box {
+        background-color: #f8f9fa;
+        border-left: 4px solid #ff007f;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+    .video-title-main {
         font-size: 15px;
         color: #111111;
         font-weight: bold;
-        margin-bottom: 8px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    }
+    .video-title-trans {
+        font-size: 13px;
+        color: #666666;
+        margin-top: 4px;
     }
     .time-badge {
         color: #666666;
@@ -107,6 +115,7 @@ def download_tk_video(video_url, status_text):
         title_short = raw_title[:20]
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
+    # 🌟 恢复最初完美的连贯数字规范命名：20260705_ankerofficial_7644772064880069902_Anker_New...
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{title_short}")
     
     ydl_opts = {
@@ -190,7 +199,7 @@ if "processed" not in st.session_state:
     st.session_state.detected_lang = "en"
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
-    st.session_state.video_title = ""  # 🌟 用于存放视频原生标题
+    st.session_state.video_title = "" 
 
 # 侧边栏登出
 st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
@@ -212,7 +221,7 @@ if not st.session_state.processed:
     
     if st.session_state.mode == "🌐 链接解析":
         url_input = st.text_input("请输入 TikTok 视频链接：", placeholder="https://www.tiktok.com/@xxx/video/xxx")
-        if st.button("🚀 开始分析 network 视频", type="primary"):
+        if st.button("🚀 开始分析网络视频", type="primary"):
             if url_input:
                 status_box = st.info("初始化网络任务中...")
                 try:
@@ -221,7 +230,7 @@ if not st.session_state.processed:
                     st.session_state.video_path = v_path
                     st.session_state.audio_path = v_path.replace(".mp4", ".mp3")
                     st.session_state.display_name = os.path.basename(v_path)
-                    st.session_state.video_title = r_title  # 🌟 录入网络标题
+                    st.session_state.video_title = r_title 
                     
                     res, lang = transcribe_any_audio(st.session_state.video_path, status_box)
                     st.session_state.raw_results = res
@@ -247,7 +256,7 @@ if not st.session_state.processed:
                     with open(saved_path, "wb") as f: f.write(uploaded_file.getbuffer())
                         
                     st.session_state.display_name = uploaded_file.name
-                    st.session_state.video_title = uploaded_file.name  # 🌟 本地文件标题即为文件名
+                    st.session_state.video_title = uploaded_file.name 
                     
                     if file_ext.lower() == "mp4":
                         st.session_state.video_path = saved_path
@@ -286,19 +295,6 @@ else:
     st.markdown("---")
     col1, col2 = st.columns([0.8, 2.5]) 
     
-    with col1:
-        st.subheader("📦 工具与下载")
-        
-        # 🌟 核心改进：把找回的视频原生标题完美贴在预览框上方
-        if st.session_state.video_title:
-            st.markdown(f'<div class="video-title-text" title="{st.session_state.video_title}">🎬 标题: {st.session_state.video_title}</div>', unsafe_allow_html=True)
-            
-        if st.session_state.video_path and os.path.exists(st.session_state.video_path):
-            v_side1, v_mid, v_side2 = st.columns([0.1, 0.8, 0.1])
-            with v_mid: st.video(st.session_state.video_path)
-            st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown("**💾 资产一键导出**")
-
     with col2:
         lang_config = {
             "简体中文": {"deepl": "zh", "google": "chinese (simplified)"},
@@ -325,7 +321,19 @@ else:
         except:
             translator = GoogleTranslator(source='auto', target=google_code)
             use_google_fallback = True
-        
+
+        # 🌟 核心升级：对视频总标题执行同步热翻译
+        translated_video_title = ""
+        if st.session_state.video_title:
+            try:
+                translated_video_title = translator.translate(st.session_state.video_title)
+            except:
+                try:
+                    emergency_title_trans = GoogleTranslator(source='auto', target=google_code)
+                    translated_video_title = emergency_title_trans.translate(st.session_state.video_title)
+                except:
+                    translated_video_title = "[标题翻译超时]"
+
         rendered_subtitles = []
         for item in st.session_state.raw_results:
             current_raw_lang = st.session_state.detected_lang.lower()
@@ -352,6 +360,25 @@ else:
             else:
                 full_text_to_copy += f"{item['raw_text']}\n" if not t_text else f"{t_text}\n"
 
+    with col1:
+        st.subheader("📦 工具与下载")
+        
+        # 🌟 核心改进：在左侧视频上方渲染“高保真完整的全量源标题+同步语种热翻译”
+        if st.session_state.video_title:
+            st.markdown(f"""
+            <div class="video-title-box">
+                <div class="video-title-main">🎬 原标题: {st.session_state.video_title}</div>
+                {f'<div class="video-title-trans">🌍 译文: {translated_video_title}</div>' if translated_video_title and target_lang_name != "English (United States)" else ''}
+            </div>
+            """, unsafe_allow_html=True)
+            
+        if st.session_state.video_path and os.path.exists(st.session_state.video_path):
+            v_side1, v_mid, v_side2 = st.columns([0.1, 0.8, 0.1])
+            with v_mid: st.video(st.session_state.video_path)
+            st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("**💾 资产一键导出**")
+
+    with col2:
         with copy_col:
             with st.popover("📋 复制文案", use_container_width=True):
                 st.caption("✨ 点击代码块右上角即可一键秒拷：")
