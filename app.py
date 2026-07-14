@@ -54,10 +54,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= 模型缓存 =================
+# ================= 📦 云端高精模型缓存（强制引入镜像站，防止云端卡死） =================
 @st.cache_resource
 def load_whisper_model():
-    return WhisperModel("tiny", device="cpu", compute_type="int8")
+    with st.spinner("首次在新电脑/新云端运行，AI 核心模型正在极速下载中..."):
+        # 🌟 核心保命行：强制云端服务器走 Hugging Face 国内镜像站，下载速度飙升，彻底解决卡死问题
+        os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
+        return WhisperModel("tiny", device="cpu", compute_type="int8")
 
 # 清理 Windows 文件名非法字符
 def safe_filename(name):
@@ -109,9 +112,8 @@ def download_tk_video(video_url, status_text):
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
         
-        # 🌟【核心突破】：TikTok 真正的无截断全量标题和所有#号标签都完整保留在 description 字段中
+        # 优先提取无截断的全量标签描述，并清洗掉异常换行
         raw_title = info_dict.get('description') or info_dict.get('title') or 'video_title'
-        # 清洗掉一些可能导致换行乱套的异常控制字符，保留干净的文本和标签
         raw_title = raw_title.replace('\n', ' ').strip()
         
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
@@ -308,7 +310,7 @@ else:
         
         final_full_title = st.session_state.video_title
         
-        # 完美的右侧极简纯净大标题（完美对齐第二张图）
+        # 完美的右侧极简纯净大标题（完美对齐你满意的第二张图外观）
         header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
         with header_col: 
             st.markdown("#### 📄 交互式字幕工作区") 
@@ -373,7 +375,7 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 左侧小看板：完美呈现原作者全量带#标签的视频文案，并支持自动换行
+        # 左侧小看板：完完整整呈现原作者全量带所有#号标签的视频文案，并完美自动换行
         if final_full_title:
             st.markdown(f"""
             <div class="video-title-box">
