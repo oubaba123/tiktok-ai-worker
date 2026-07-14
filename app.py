@@ -14,20 +14,17 @@ st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 左侧视频上方小看板样式 - 允许超长标题和所有#标签完完整整地自动折行，拒绝任何三个点 */
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
-        padding: 8px 12px;
+        padding: 6px 10px;
         border-radius: 4px;
         margin-bottom: 12px;
         font-size: 13px;
         color: #111111;
         white-space: normal !important;  
-        word-break: break-word !important; 
-        line-height: 1.5;
+        word-break: break-all !important; 
     }
-    
     .time-badge {
         color: #666666;
         font-family: 'Courier New', Courier, monospace;
@@ -54,10 +51,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= 模型缓存 =================
+# ================= 📦 模型缓存（加入新电脑首次下载的温馨提示） =================
 @st.cache_resource
 def load_whisper_model():
-    return WhisperModel("tiny", device="cpu", compute_type="int8")
+    # 🌟 用 spinner 在前端显式提醒，防止新电脑首次下载时误以为卡死
+    with st.spinner("首次在新电脑上运行，AI 核心模型正在下载中（约 75MB），请保持网络畅通，耐心等待 1-3 分钟..."):
+        return WhisperModel("tiny", device="cpu", compute_type="int8")
 
 # 清理 Windows 文件名非法字符
 def safe_filename(name):
@@ -108,12 +107,8 @@ def download_tk_video(video_url, status_text):
         info_dict = ydl.extract_info(video_url, download=False)
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
-        
-        # 🌟【核心突破】：TikTok 真正的无截断全量标题和所有#号标签都完整保留在 description 字段中
         raw_title = info_dict.get('description') or info_dict.get('title') or 'video_title'
-        # 清洗掉一些可能导致换行乱套的异常控制字符，保留干净的文本和标签
         raw_title = raw_title.replace('\n', ' ').strip()
-        
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
             
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title[:15]}")
@@ -144,6 +139,7 @@ def format_short_time(seconds):
     return f"{parts[1]}:{parts[2]}"
 
 def transcribe_any_audio(file_path, status_text):
+    # 🌟 触发带提示的下载/加载核心
     model = load_whisper_model()
     status_text.text("AI 正在高精提取语音数据...")
     segments, info = model.transcribe(file_path, beam_size=5, language=None)
@@ -308,7 +304,6 @@ else:
         
         final_full_title = st.session_state.video_title
         
-        # 完美的右侧极简纯净大标题（完美对齐第二张图）
         header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
         with header_col: 
             st.markdown("#### 📄 交互式字幕工作区") 
@@ -339,7 +334,6 @@ else:
                 except:
                     translated_video_title = "[标题翻译超时]"
 
-        # 下拉框下方的小字地球仪行，展示作者原生带#标签标题的对应译文
         if translated_video_title and target_lang_name != "English (United States)":
             st.markdown(f"🌍 译文标题: {translated_video_title}")
 
@@ -373,7 +367,6 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 左侧小看板：完美呈现原作者全量带#标签的视频文案，并支持自动换行
         if final_full_title:
             st.markdown(f"""
             <div class="video-title-box">
