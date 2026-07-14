@@ -52,26 +52,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= 📦 云端自适应模型缓存（智能判别环境，杜绝卡死） =================
+# ================= 📦 官网云端高精模型加载（海外内网极速秒开） =================
 @st.cache_resource
 def load_whisper_model():
-    with st.spinner("AI 语音识别引擎正在初始化中，请稍候..."):
-        # 检测是否运行在 Streamlit 官方云端环境
-        is_streamlit_cloud = os.environ.get("STREAMLIT_RUNTIME_ENVIRONMENT") or os.path.exists("/mount/src")
-        
-        if is_streamlit_cloud:
-            # 🌟 云端策略：由于服务器在海外，不再使用国内镜像，转而微调并发线程，并开启延迟极速握手
-            # 这样可以防止低配置云端服务器在加载大模型时瞬间撑爆内存卡死
-            return WhisperModel(
-                "tiny", 
-                device="cpu", 
-                compute_type="int8",
-                cpu_threads=1,       # 限制线程，防止撑爆免费云端极低内存
-                num_workers=1        # 降低并发，保命第一
-            )
-        else:
-            # 本地策略：如果是在你自己的高性能电脑本地运行，则全量释放性能
-            return WhisperModel("tiny", device="cpu", compute_type="int8")
+    with st.spinner("首次在新云端运行，AI 核心模型正在极速初始化中..."):
+        # 🌟 针对官网 Streamlit Cloud 优化：
+        # 1. 彻底移除国内镜像站，直接走 HF 官方内网（在美西云服务器上下载 tiny 模型只要 2 秒钟）
+        # 2. 限制单线程，防止爆内存
+        return WhisperModel(
+            "tiny", 
+            device="cpu", 
+            compute_type="int8",
+            cpu_threads=1,
+            num_workers=1
+        )
 
 # 清理 Windows 文件名非法字符
 def safe_filename(name):
@@ -123,6 +117,7 @@ def download_tk_video(video_url, status_text):
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
         
+        # 优先提取无截断的全量标签描述
         raw_title = info_dict.get('description') or info_dict.get('title') or 'video_title'
         raw_title = raw_title.replace('\n', ' ').strip()
         
