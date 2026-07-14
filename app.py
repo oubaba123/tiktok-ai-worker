@@ -14,7 +14,6 @@ st.set_page_config(page_title="TikTok AI 视频字幕工作台", page_icon="🎬
 # ================= 🎨 注入微调 CSS 样式 =================
 st.markdown("""
 <style>
-    /* 左侧视频上方小看板样式 - 允许超长标题和所有#标签完完整整地自动折行，拒绝任何三个点 */
     .video-title-box {
         background-color: #f8f9fa;
         border-left: 4px solid #ff007f;
@@ -27,7 +26,6 @@ st.markdown("""
         word-break: break-word !important; 
         line-height: 1.5;
     }
-    
     .time-badge {
         color: #666666;
         font-family: 'Courier New', Courier, monospace;
@@ -54,10 +52,26 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ================= 模型缓存 =================
+# ================= 📦 云端自适应模型缓存（智能判别环境，杜绝卡死） =================
 @st.cache_resource
 def load_whisper_model():
-    return WhisperModel("tiny", device="cpu", compute_type="int8")
+    with st.spinner("AI 语音识别引擎正在初始化中，请稍候..."):
+        # 检测是否运行在 Streamlit 官方云端环境
+        is_streamlit_cloud = os.environ.get("STREAMLIT_RUNTIME_ENVIRONMENT") or os.path.exists("/mount/src")
+        
+        if is_streamlit_cloud:
+            # 🌟 云端策略：由于服务器在海外，不再使用国内镜像，转而微调并发线程，并开启延迟极速握手
+            # 这样可以防止低配置云端服务器在加载大模型时瞬间撑爆内存卡死
+            return WhisperModel(
+                "tiny", 
+                device="cpu", 
+                compute_type="int8",
+                cpu_threads=1,       # 限制线程，防止撑爆免费云端极低内存
+                num_workers=1        # 降低并发，保命第一
+            )
+        else:
+            # 本地策略：如果是在你自己的高性能电脑本地运行，则全量释放性能
+            return WhisperModel("tiny", device="cpu", compute_type="int8")
 
 # 清理 Windows 文件名非法字符
 def safe_filename(name):
@@ -109,9 +123,7 @@ def download_tk_video(video_url, status_text):
         author = info_dict.get('uploader', 'unknown_user')
         video_id = info_dict.get('id', '000000')
         
-        # 🌟【核心突破】：TikTok 真正的无截断全量标题和所有#号标签都完整保留在 description 字段中
         raw_title = info_dict.get('description') or info_dict.get('title') or 'video_title'
-        # 清洗掉一些可能导致换行乱套的异常控制字符，保留干净的文本和标签
         raw_title = raw_title.replace('\n', ' ').strip()
         
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
@@ -308,7 +320,6 @@ else:
         
         final_full_title = st.session_state.video_title
         
-        # 完美的右侧极简纯净大标题（完美对齐第二张图）
         header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
         with header_col: 
             st.markdown("#### 📄 交互式字幕工作区") 
@@ -339,7 +350,6 @@ else:
                 except:
                     translated_video_title = "[标题翻译超时]"
 
-        # 下拉框下方的小字地球仪行，展示作者原生带#标签标题的对应译文
         if translated_video_title and target_lang_name != "English (United States)":
             st.markdown(f"🌍 译文标题: {translated_video_title}")
 
@@ -373,7 +383,6 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 左侧小看板：完美呈现原作者全量带#标签的视频文案，并支持自动换行
         if final_full_title:
             st.markdown(f"""
             <div class="video-title-box">
