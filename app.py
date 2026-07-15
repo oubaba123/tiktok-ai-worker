@@ -56,9 +56,6 @@ st.markdown("""
 @st.cache_resource
 def load_whisper_model():
     with st.spinner("首次在新云端运行，AI 核心模型正在极速初始化中..."):
-        # 🌟 针对官网 Streamlit Cloud 优化：
-        # 1. 彻底移除国内镜像站，直接走 HF 官方内网（在美西云服务器上下载 tiny 模型只要 2 秒钟）
-        # 2. 限制单线程，防止爆内存
         return WhisperModel(
             "tiny", 
             device="cpu", 
@@ -99,6 +96,27 @@ def extract_audio_pure_python(video_path, output_audio_path):
         print(f"音频分离失败: {str(e)}")
         return False
 
+# 数字人性化转换函数（例如：1023000 -> 1.02M）
+def format_number(num):
+    if num is None:
+        return "0"
+    num = int(num)
+    if num >= 1000000:
+        return f"{num / 1000000:.2f}M"
+    elif num >= 1000:
+        return f"{num / 1000:.1f}K"
+    return str(num)
+
+# 日期格式化处理函数
+def format_date_str(date_str):
+    if not date_str:
+        return "未知时间"
+    try:
+        # yt-dlp 返回的格式通常是 YYYYMMDD
+        return f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+    except:
+        return date_str
+
 # 防断流多线程自适应链接下载函数
 def download_tk_video(video_url, status_text):
     status_text.text("正在智能解析本地网络代理环境...")
@@ -122,6 +140,15 @@ def download_tk_video(video_url, status_text):
         raw_title = raw_title.replace('\n', ' ').strip()
         
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
+        
+        # 🌟 核心升级：抓取播放量、点赞量、收藏量数据并存入 Session State 状态中
+        st.session_state.video_metrics = {
+            "upload_date": format_date_str(upload_date),
+            "view_count": format_number(info_dict.get("view_count")),
+            "like_count": format_number(info_dict.get("like_count")),
+            "collect_count": format_number(info_dict.get("playlist_index") or info_dict.get("repost_count") or 0) 
+        }
+        # 💡 注：由于 TikTok 原生接口限制，部分环境收藏量若抓不到，会自动用转发量(repost_count)兜底补充
             
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title[:15]}")
     
@@ -207,6 +234,8 @@ if "processed" not in st.session_state:
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
     st.session_state.video_title = "" 
+    # 初始化数据指标缓存
+    st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "collect_count": "-"}
 
 # 侧边栏登出
 st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
@@ -264,6 +293,7 @@ if not st.session_state.processed:
                         
                     st.session_state.display_name = uploaded_file.name
                     st.session_state.video_title = uploaded_file.name 
+                    st.session_state.video_metrics = {"upload_date": "本地文件", "view_count": "本地", "like_count": "本地", "collect_count": "本地"}
                     
                     if file_ext.lower() == "mp4":
                         st.session_state.video_path = saved_path
@@ -297,6 +327,7 @@ else:
         st.session_state.audio_path = ""
         st.session_state.raw_results = []
         st.session_state.video_title = ""
+        st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "collect_count": "-"}
         st.rerun()
 
     st.markdown("---")
@@ -377,6 +408,17 @@ else:
 
     with col1:
         st.subheader("📦 工具与下载")
+        
+        # 🌟 核心升级：在左侧工具栏渲染精美的 TikTok 原生视频核心数据卡片
+        st.markdown(f"📅 **发布时间**：`{st.session_state.video_metrics['upload_date']}`")
+        m_col1, m_col2, m_col3 = st.columns(3)
+        with m_col1:
+            st.metric(label="👀 播放量", value=st.session_state.video_metrics['view_count'])
+        with m_col2:
+            st.metric(label="❤️ 点赞量", value=st.session_state.video_metrics['like_count'])
+        with m_col3:
+            st.metric(label="🔁 转发/收藏", value=st.session_state.video_metrics['collect_count'])
+        st.markdown("---")
         
         if final_full_title:
             st.markdown(f"""
