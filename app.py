@@ -49,6 +49,27 @@ st.markdown("""
         border-bottom: 1px dashed #eef2f6;
         margin-bottom: 12px;
     }
+    /* 🌟 新增：微型横向数据标签样式 */
+    .mini-metrics-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 12px;
+    }
+    .mini-metric-badge {
+        background-color: #f1f3f5;
+        color: #495057;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+    }
+    .mini-metric-badge strong {
+        color: #111111;
+        margin-left: 3px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -139,13 +160,14 @@ def download_tk_video(video_url, status_text):
         
         upload_date = info_dict.get('upload_date') or datetime.datetime.now().strftime("%Y%m%d")
         
-        # 🌟 核心升级：完整抓取 播放、点赞、评论、收藏 四大互动数据
+        # 🌟 核心升级：彻底解耦，独立拆分出五大核心互动数据
         st.session_state.video_metrics = {
             "upload_date": format_date_str(upload_date),
             "view_count": format_number(info_dict.get("view_count")),
             "like_count": format_number(info_dict.get("like_count")),
             "comment_count": format_number(info_dict.get("comment_count")),
-            "collect_count": format_number(info_dict.get("playlist_index") or info_dict.get("repost_count") or 0) 
+            "playlist_index": format_number(info_dict.get("playlist_index") or 0), # 收藏数
+            "repost_count": format_number(info_dict.get("repost_count") or 0)     # 转发数
         }
             
     custom_name = safe_filename(f"temp_{upload_date}_{author}_{video_id}_{raw_title[:15]}")
@@ -232,8 +254,8 @@ if "processed" not in st.session_state:
     st.session_state.mode = "🌐 链接解析"
     st.session_state.display_name = ""
     st.session_state.video_title = "" 
-    # 初始化全维度指标缓存
-    st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "comment_count": "-", "collect_count": "-"}
+    # 初始化全解耦指标缓存
+    st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "comment_count": "-", "playlist_index": "-", "repost_count": "-"}
 
 # 侧边栏登出
 st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
@@ -280,7 +302,7 @@ if not st.session_state.processed:
         uploaded_file = st.file_uploader("请选择本地视频/音频文件：", type=["mp4", "mp3", "m4a", "wav"])
         if st.button("🚀 开始智能提取本地文件", type="primary"):
             if uploaded_file:
-                status_box = st.info("正在将文件载入内存...")
+                status_box = st.info("正在将 file 载入内存...")
                 try:
                     auto_cleanup_old_files()
                     file_ext = uploaded_file.name.split(".")[-1]
@@ -291,7 +313,7 @@ if not st.session_state.processed:
                         
                     st.session_state.display_name = uploaded_file.name
                     st.session_state.video_title = uploaded_file.name 
-                    st.session_state.video_metrics = {"upload_date": "本地文件", "view_count": "本地", "like_count": "本地", "comment_count": "本地", "collect_count": "本地"}
+                    st.session_state.video_metrics = {"upload_date": "本地文件", "view_count": "本地", "like_count": "本地", "comment_count": "本地", "playlist_index": "本地", "repost_count": "本地"}
                     
                     if file_ext.lower() == "mp4":
                         st.session_state.video_path = saved_path
@@ -325,7 +347,7 @@ else:
         st.session_state.audio_path = ""
         st.session_state.raw_results = []
         st.session_state.video_title = ""
-        st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "comment_count": "-", "collect_count": "-"}
+        st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "comment_count": "-", "playlist_index": "-", "repost_count": "-"}
         st.rerun()
 
     st.markdown("---")
@@ -407,22 +429,20 @@ else:
     with col1:
         st.subheader("📦 工具与下载")
         
-        # 🌟 核心升级：左侧工具区精美渲染 播放、点赞、评论、收藏 四大指标卡片
-        st.markdown(f"📅 **发布时间**：`{st.session_state.video_metrics['upload_date']}`")
-        
-        # 采用 2x2 的精美四宫格布局，防止指标太多导致横向挤压
-        m_row1_col1, m_row1_col2 = st.columns(2)
-        with m_row1_col1:
-            st.metric(label="👀 播放量", value=st.session_state.video_metrics['view_count'])
-        with m_row1_col2:
-            st.metric(label="❤️ 点赞量", value=st.session_state.video_metrics['like_count'])
+        # 🌟 核心升级：改用纯 HTML 编写微型横排轻量级数据组件
+        m = st.session_state.video_metrics
+        st.markdown(f"""
+        <div style="font-size:12px; color:#666; margin-bottom:6px;">📅 发布时间：<code>{m['upload_date']}</code></div>
+        <div class="mini-metrics-container">
+            <span class="mini-metric-badge">👀 播放 <strong>{m['view_count']}</strong></span>
+            <span class="mini-metric-badge">❤️ 点赞 <strong>{m['like_count']}</strong></span>
+            <span class="mini-metric-badge">💬 评论 <strong>{m['comment_count']}</strong></span>
+            <span class="mini-metric-badge">⭐ 收藏 <strong>{m['playlist_index']}</strong></span>
+            <span class="mini-metric-badge">🔁 转发 <strong>{m['repost_count']}</strong></span>
+        </div>
+        """, unsafe_allow_html=True)
             
-        m_row2_col1, m_row2_col2 = st.columns(2)
-        with m_row2_col1:
-            st.metric(label="💬 评论数", value=st.session_state.video_metrics['comment_count'])
-        with m_row2_col2:
-            st.metric(label="🔁 收藏/转发", value=st.session_state.video_metrics['collect_count'])
-            
+        st.markdown("hr", unsafe_allow_html=True) # 原行替换为干净的分隔
         st.markdown("---")
         
         if final_full_title:
