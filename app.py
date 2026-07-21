@@ -3,7 +3,6 @@ import os
 import datetime
 import re
 import glob
-import json
 import urllib.request
 from yt_dlp import YoutubeDL
 from faster_whisper import WhisperModel
@@ -26,6 +25,31 @@ st.markdown("""
         white-space: normal !important;  
         word-break: break-word !important; 
         line-height: 1.5;
+    }
+    .time-badge {
+        color: #666666;
+        font-family: 'Courier New', Courier, monospace;
+        font-weight: 500;
+        font-size: 14px;
+        padding-top: 2px;
+    }
+    .en-text {
+        color: #111111;
+        font-weight: 500;
+        font-size: 15px;
+        margin-bottom: 2px;
+        word-break: break-word;
+    }
+    .zh-text {
+        color: #666666;
+        font-weight: 400;
+        font-size: 13px;
+        margin-bottom: 8px;
+        word-break: break-word;
+    }
+    .sub-divider {
+        border-bottom: 1px dashed #eef2f6;
+        margin-bottom: 10px;
     }
     /* 横向微型数据标签样式 */
     .mini-metrics-container {
@@ -209,109 +233,9 @@ def transcribe_any_audio(file_path, status_text):
             "index": i,
             "start": format_short_time(segment.start),
             "end": format_short_time(segment.end),
-            "start_sec": float(segment.start),
-            "end_sec": float(segment.end),
             "raw_text": segment.text.strip()
         })
     return results, detected_lang
-
-# ================= 🌟 高性能前端 JS 播放器 =================
-def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
-    import base64
-    video_b64 = base64.b64encode(video_bytes).decode('utf-8')
-    subtitles_json = json.dumps(subtitles_data)
-    is_bi_js = "true" if is_bilingual else "false"
-    
-    html_code = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin:0; padding:0; background:#fff; }}
-        .player-layout {{ display: flex; gap: 16px; height: 500px; }}
-        .video-box {{ flex: 1; display: flex; flex-direction: column; justify-content: center; background:#000; border-radius: 8px; overflow: hidden; }}
-        video {{ width: 100%; max-height: 100%; object-fit: contain; }}
-        .sub-box {{ flex: 1.5; height: 100%; overflow-y: auto; padding: 8px 12px; border: 1px solid #eef2f6; border-radius: 8px; box-sizing: border-box; }}
-        .sub-item {{ padding: 8px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s ease; border-left: 3px solid transparent; }}
-        .sub-item:hover {{ background-color: #f8f9fa; }}
-        .sub-item.active {{ background-color: #fff0f6; border-left-color: #ff007f; }}
-        .sub-time {{ font-size: 12px; color: #888; font-family: monospace; margin-bottom: 2px; }}
-        .sub-en {{ font-size: 15px; color: #111; font-weight: 500; word-break: break-word; }}
-        .sub-zh {{ font-size: 13px; color: #666; margin-top: 2px; word-break: break-word; }}
-    </style>
-    </head>
-    <body>
-    <div class="player-layout">
-        <div class="video-box">
-            <video id="myVideo" controls>
-                <source src="data:video/mp4;base64,{video_b64}" type="video/mp4">
-            </video>
-        </div>
-        <div class="sub-box" id="subContainer"></div>
-    </div>
-
-    <script>
-        const subs = {subtitles_json};
-        const isBi = {is_bi_js};
-        const video = document.getElementById('myVideo');
-        const container = document.getElementById('subContainer');
-
-        subs.forEach((sub, index) => {{
-            const item = document.createElement('div');
-            item.className = 'sub-item';
-            item.id = 'sub-' + index;
-            item.onclick = () => {{ video.currentTime = sub.start_sec; video.play(); }};
-            
-            let html = `<div class="sub-time">${{sub.start}} - ${{sub.end}}</div>`;
-            const rawText = sub.raw || "";
-            const transText = sub.trans || "";
-
-            if (isBi) {{
-                html += `<div class="sub-en">${{rawText}}</div>`;
-                if (transText) {{
-                    html += `<div class="sub-zh">${{transText}}</div>`;
-                }}
-            }} else {{
-                const showText = transText !== "" ? transText : rawText;
-                html += `<div class="sub-en">${{showText}}</div>`;
-            }}
-            item.innerHTML = html;
-            container.appendChild(item);
-        }});
-
-        let activeIdx = -1;
-        video.addEventListener('timeupdate', () => {{
-            const curTime = video.currentTime;
-            let foundIdx = -1;
-            
-            for(let i = 0; i < subs.length; i++) {{
-                if (curTime >= subs[i].start_sec && curTime <= subs[i].end_sec) {{
-                    foundIdx = i;
-                    break;
-                }}
-            }}
-
-            if (foundIdx !== activeIdx) {{
-                if (activeIdx !== -1) {{
-                    const prevEl = document.getElementById('sub-' + activeIdx);
-                    if(prevEl) prevEl.classList.remove('active');
-                }}
-                if (foundIdx !== -1) {{
-                    const curEl = document.getElementById('sub-' + foundIdx);
-                    if(curEl) {{
-                        curEl.classList.add('active');
-                        curEl.scrollIntoView({{ behavior: 'smooth', block: 'nearest' }});
-                    }}
-                }}
-                activeIdx = foundIdx;
-            }}
-        }});
-    </script>
-    </body>
-    </html>
-    """
-    return html_code
 
 # ================= 👥 账号权限 =================
 USER_WHITE_LIST = {"george": "666888", "laowang": "888888", "xiaozhang": "abc123"}
@@ -349,7 +273,6 @@ if "processed" not in st.session_state:
     st.session_state.display_name = ""
     st.session_state.video_title = "" 
     st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "comment_count": "-", "collect_count": "-", "repost_count": "-"}
-    # 🌟 翻译结果本地缓存池
     st.session_state.translation_cache = {} 
     st.session_state.title_cache = {}
 
@@ -386,7 +309,7 @@ if not st.session_state.processed:
                     res, lang = transcribe_any_audio(st.session_state.video_path, status_box)
                     st.session_state.raw_results = res
                     st.session_state.detected_lang = lang
-                    st.session_state.translation_cache = {} # 清空旧缓存
+                    st.session_state.translation_cache = {} 
                     st.session_state.title_cache = {}
                     
                     st.session_state.processed = True
@@ -453,6 +376,8 @@ else:
 
     st.markdown("---")
     
+    col1, col2 = st.columns([1, 2]) 
+    
     lang_config = {
         "简体中文": {"deepl": "zh", "google": "chinese (simplified)"},
         "English (United States)": {"deepl": "en", "google": "english"},
@@ -463,106 +388,119 @@ else:
     }
     
     final_full_title = st.session_state.video_title
-    
-    top_col1, top_col2, top_col3, top_col4 = st.columns([2.5, 1.5, 1.2, 1.2])
-    with top_col1: 
-        st.markdown("#### 📄 交互式字幕同步工作区") 
-    with top_col2:
-        target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
-        deepl_code = lang_config[target_lang_name]["deepl"]
-        google_code = lang_config[target_lang_name]["google"]
-    with top_col3: 
-        is_bilingual = st.toggle("双语对照", value=True)
+
+    with col2:
+        header_col, select_col, toggle_col, copy_col = st.columns([2.5, 1.5, 1.2, 1.2])
+        with header_col: 
+            st.markdown("#### 📄 交互式字幕工作区") 
+        with select_col:
+            target_lang_name = st.selectbox("选择目标语言", list(lang_config.keys()), label_visibility="collapsed")
+            deepl_code = lang_config[target_lang_name]["deepl"]
+            google_code = lang_config[target_lang_name]["google"]
+        with toggle_col: 
+            is_bilingual = st.toggle("双语对照", value=True)
+
+        # 🌟 极速读取与智能缓存逻辑
+        cache_key = f"{target_lang_name}"
         
-    # 🌟 极速读取与智能缓存逻辑
-    cache_key = f"{target_lang_name}"
-    
-    if cache_key not in st.session_state.translation_cache:
-        raw_texts = [item["raw_text"] for item in st.session_state.raw_results]
-        with st.spinner(f"正在首次翻译为 {target_lang_name}..."):
-            trans_results = translate_text_list(raw_texts, deepl_code, google_code, st.session_state.detected_lang)
-            st.session_state.translation_cache[cache_key] = trans_results
+        if cache_key not in st.session_state.translation_cache:
+            raw_texts = [item["raw_text"] for item in st.session_state.raw_results]
+            with st.spinner(f"正在首次翻译为 {target_lang_name}..."):
+                trans_results = translate_text_list(raw_texts, deepl_code, google_code, st.session_state.detected_lang)
+                st.session_state.translation_cache[cache_key] = trans_results
+                
+                if final_full_title:
+                    t_title = translate_text_list([final_full_title], deepl_code, google_code, st.session_state.detected_lang)[0]
+                    st.session_state.title_cache[cache_key] = t_title
+
+        cached_trans = st.session_state.translation_cache[cache_key]
+        translated_video_title = st.session_state.title_cache.get(cache_key, "")
+
+        rendered_subtitles = []
+        full_text_to_copy = ""
+        for idx, item in enumerate(st.session_state.raw_results):
+            t_text = cached_trans[idx]
+            rendered_subnotes = {
+                "raw": item["raw_text"], 
+                "trans": t_text, 
+                "start": item["start"], 
+                "end": item["end"]
+            }
+            rendered_subtitles.append(rendered_subnotes)
             
-            if final_full_title:
-                t_title = translate_text_list([final_full_title], deepl_code, google_code, st.session_state.detected_lang)[0]
-                st.session_state.title_cache[cache_key] = t_title
+            if is_bilingual:
+                full_text_to_copy += f"{item['raw_text']}\n{t_text}\n" if t_text else f"{item['raw_text']}\n"
+            else:
+                full_text_to_copy += f"{item['raw_text']}\n" if not t_text else f"{t_text}\n"
 
-    cached_trans = st.session_state.translation_cache[cache_key]
-    translated_video_title = st.session_state.title_cache.get(cache_key, "")
+        with copy_col:
+            with st.popover("📋 复制文案", use_container_width=True):
+                st.caption("✨ 点击代码块右上角即可一键秒拷：")
+                st.code(full_text_to_copy, language="text")
 
-    rendered_subtitles = []
-    full_text_to_copy = ""
-    for idx, item in enumerate(st.session_state.raw_results):
-        t_text = cached_trans[idx]
-        rendered_subnotes = {
-            "raw": item["raw_text"], 
-            "trans": t_text, 
-            "start": item["start"], 
-            "end": item["end"],
-            "start_sec": item["start_sec"],
-            "end_sec": item["end_sec"]
-        }
-        rendered_subtitles.append(rendered_subnotes)
+    with col1:
+        st.subheader("📦 工具与下载")
         
-        if is_bilingual:
-            full_text_to_copy += f"{item['raw_text']}\n{t_text}\n" if t_text else f"{item['raw_text']}\n"
-        else:
-            full_text_to_copy += f"{item['raw_text']}\n" if not t_text else f"{t_text}\n"
-
-    with top_col4:
-        with st.popover("📋 复制文案", use_container_width=True):
-            st.caption("✨ 点击代码块右上角即可一键秒拷：")
-            st.code(full_text_to_copy, language="text")
-
-    # 头部展示
-    m = st.session_state.video_metrics
-    st.markdown(f"""
-    <div style="font-size: 14px; font-weight: bold; color: #333333; margin-bottom: 8px;">📅 发布时间：{m['upload_date']}</div>
-    <div class="mini-metrics-container">
-        <span class="mini-metric-badge">👀 播放 <strong>{m['view_count']}</strong></span>
-        <span class="mini-metric-badge">❤️ 点赞 <strong>{m['like_count']}</strong></span>
-        <span class="mini-metric-badge">💬 评论 <strong>{m['comment_count']}</strong></span>
-        <span class="mini-metric-badge">⭐ 收藏 <strong>{m['collect_count']}</strong></span>
-        <span class="mini-metric-badge">🔁 转发 <strong>{m['repost_count']}</strong></span>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if final_full_title:
+        # 微型数据标签展示
+        m = st.session_state.video_metrics
         st.markdown(f"""
-        <div class="video-title-box">
-            <b>🎬 原标题:</b> {final_full_title}<br>
-            {f'<b>🌍 译文:</b> {translated_video_title}' if translated_video_title and target_lang_name != "English (United States)" else ''}
+        <div style="font-size: 14px; font-weight: bold; color: #333333; margin-bottom: 8px;">📅 发布时间：{m['upload_date']}</div>
+        <div class="mini-metrics-container">
+            <span class="mini-metric-badge">👀 播放 <strong>{m['view_count']}</strong></span>
+            <span class="mini-metric-badge">❤️ 点赞 <strong>{m['like_count']}</strong></span>
+            <span class="mini-metric-badge">💬 评论 <strong>{m['comment_count']}</strong></span>
+            <span class="mini-metric-badge">⭐ 收藏 <strong>{m['collect_count']}</strong></span>
+            <span class="mini-metric-badge">🔁 转发 <strong>{m['repost_count']}</strong></span>
         </div>
         """, unsafe_allow_html=True)
 
-    # 核心播放区
-    if st.session_state.video_path and os.path.exists(st.session_state.video_path):
-        with open(st.session_state.video_path, "rb") as vf:
-            video_bytes = vf.read()
-        
-        player_html = render_sync_subtitle_player(video_bytes, rendered_subtitles, is_bilingual)
-        st.components.v1.html(player_html, height=520)
+        st.markdown("---")
 
-    # 底部资产导出区
-    st.markdown("---")
-    st.markdown("**💾 资产一键导出**")
-    ex_col1, ex_col2, ex_col3 = st.columns(3)
-    
-    current_srt_output = ""
-    for idx, sub in enumerate(rendered_subtitles, start=1):
-        srt_start = f"00:{sub['start']},000"
-        srt_end = f"00:{sub['end']},000"
-        if is_bilingual: srt_text = f"{sub['raw']}\n{sub['trans']}" if sub['trans'] else sub['raw']
-        else: srt_text = sub['raw'] if not sub['trans'] else sub['trans']
-        current_srt_output += f"{idx}\n{srt_start} --> {srt_end}\n{srt_text}\n\n"
+        if final_full_title:
+            st.markdown(f"""
+            <div class="video-title-box">
+                <b>🎬 原标题:</b> {final_full_title}<br>
+                {f'<b>🌍 译文:</b> {translated_video_title}' if translated_video_title and target_lang_name != "English (United States)" else ''}
+            </div>
+            """, unsafe_allow_html=True)
 
-    with ex_col1:
+        # 🚀 原生高效视频播放器
+        if st.session_state.video_path and os.path.exists(st.session_state.video_path):
+            st.video(st.session_state.video_path)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown("**💾 资产一键导出**")
+
+        current_srt_output = ""
+        for idx, sub in enumerate(rendered_subtitles, start=1):
+            srt_start = f"00:{sub['start']},000"
+            srt_end = f"00:{sub['end']},000"
+            if is_bilingual: srt_text = f"{sub['raw']}\n{sub['trans']}" if sub['trans'] else sub['raw']
+            else: srt_text = sub['raw'] if not sub['trans'] else sub['trans']
+            current_srt_output += f"{idx}\n{srt_start} --> {srt_end}\n{srt_text}\n\n"
+
         if st.session_state.video_path and os.path.exists(st.session_state.video_path):
             with open(st.session_state.video_path, "rb") as vf:
                 st.download_button(label="📥 下载视频 (.mp4)", data=vf, file_name=st.session_state.display_name if st.session_state.display_name.endswith(".mp4") else st.session_state.display_name + ".mp4", mime="video/mp4", use_container_width=True)
-    with ex_col2:
+        
         if os.path.exists(st.session_state.audio_path):
             with open(st.session_state.audio_path, "rb") as af:
                 st.download_button(label="🎵 下载音频 (.mp3)", data=af, file_name=st.session_state.display_name.split(".")[0] + ".mp3", mime="audio/mp3", use_container_width=True)
-    with ex_col3:
+                
         st.download_button(label="📄 下载字幕 (.srt)", data=current_srt_output, file_name=st.session_state.display_name.split(".")[0] + f"_{target_lang_name}.srt", mime="text/plain", use_container_width=True)
+
+    # 右侧滚动字幕展示区
+    with col2:
+        st.markdown("---")
+        with st.container(height=520):
+            for sub in rendered_subtitles:
+                sub_col_time, sub_col_text = st.columns([1, 4])
+                with sub_col_time: st.markdown(f'<div class="time-badge">{sub["start"]}-{sub["end"]}</div>', unsafe_allow_html=True)
+                with sub_col_text:
+                    if is_bilingual:
+                        st.markdown(f'<div class="en-text">{sub["raw"]}</div>', unsafe_allow_html=True)
+                        if sub["trans"]: st.markdown(f'<div class="zh-text">{sub["trans"]}</div>', unsafe_allow_html=True)
+                    else:
+                        if not sub["trans"]: st.markdown(f'<div class="en-text">{sub["raw"]}</div>', unsafe_allow_html=True)
+                        else: st.markdown(f'<div class="en-text">{sub["trans"]}</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="sub-divider"></div>', unsafe_allow_html=True)
