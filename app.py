@@ -116,6 +116,27 @@ def format_date_str(date_str):
     except:
         return date_str
 
+# ⚡ 带缓存的高效批翻译函数
+def translate_text_list(text_list, deepl_code, google_code, raw_lang):
+    if deepl_code.split('-')[0] == raw_lang.lower():
+        return [""] * len(text_list)
+        
+    try:
+        translator = DeeplTranslator(source='auto', target=deepl_code, use_free_api=True)
+    except:
+        translator = GoogleTranslator(source='auto', target=google_code)
+
+    translated_list = []
+    for txt in text_list:
+        if not txt:
+            translated_list.append("")
+            continue
+        try:
+            translated_list.append(translator.translate(txt))
+        except:
+            translated_list.append("[翻译超时]")
+    return translated_list
+
 # 防断流多线程自适应链接下载函数
 def download_tk_video(video_url, status_text):
     status_text.text("正在智能解析本地网络代理环境...")
@@ -194,7 +215,7 @@ def transcribe_any_audio(file_path, status_text):
         })
     return results, detected_lang
 
-# ================= 🌟 修复版 JS/HTML 播放器组件 =================
+# ================= 🌟 高性能前端 JS 播放器 =================
 def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
     import base64
     video_b64 = base64.b64encode(video_bytes).decode('utf-8')
@@ -214,7 +235,6 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
         .sub-box {{ flex: 1.5; height: 100%; overflow-y: auto; padding: 8px 12px; border: 1px solid #eef2f6; border-radius: 8px; box-sizing: border-box; }}
         .sub-item {{ padding: 8px; border-radius: 6px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s ease; border-left: 3px solid transparent; }}
         .sub-item:hover {{ background-color: #f8f9fa; }}
-        /* 高亮样式 */
         .sub-item.active {{ background-color: #fff0f6; border-left-color: #ff007f; }}
         .sub-time {{ font-size: 12px; color: #888; font-family: monospace; margin-bottom: 2px; }}
         .sub-en {{ font-size: 15px; color: #111; font-weight: 500; word-break: break-word; }}
@@ -237,7 +257,6 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
         const video = document.getElementById('myVideo');
         const container = document.getElementById('subContainer');
 
-        // 🌟 修复渲染逻辑：严格强类型防御，防止关闭双语时卡死
         subs.forEach((sub, index) => {{
             const item = document.createElement('div');
             item.className = 'sub-item';
@@ -254,7 +273,6 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
                     html += `<div class="sub-zh">${{transText}}</div>`;
                 }}
             }} else {{
-                // 关闭双语时优先显示译文，若无译文则降级显示原文
                 const showText = transText !== "" ? transText : rawText;
                 html += `<div class="sub-en">${{showText}}</div>`;
             }}
@@ -262,7 +280,6 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
             container.appendChild(item);
         }});
 
-        // 监听视频进度进行实时高亮 + 自动滚动
         let activeIdx = -1;
         video.addEventListener('timeupdate', () => {{
             const curTime = video.currentTime;
@@ -296,18 +313,13 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
     """
     return html_code
 
-# ================= 👥 独立账号权限白名单管理 =================
-USER_WHITE_LIST = {
-    "george": "666888",
-    "laowang": "888888",
-    "xiaozhang": "abc123"
-}
+# ================= 👥 账号权限 =================
+USER_WHITE_LIST = {"george": "666888", "laowang": "888888", "xiaozhang": "abc123"}
 
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
     st.session_state.current_user = ""
 
-# 拦截门禁
 if not st.session_state.authenticated:
     _, login_col, _ = st.columns([1, 1.5, 1])
     with login_col:
@@ -326,7 +338,7 @@ if not st.session_state.authenticated:
                 st.error("❌ 账号或密码不正确！")
     st.stop()
 
-# ================= 状态保持初始化 =================
+# ================= 🚀 状态与翻译缓存池初始化 =================
 if "processed" not in st.session_state:
     st.session_state.processed = False
     st.session_state.video_path = ""
@@ -337,8 +349,10 @@ if "processed" not in st.session_state:
     st.session_state.display_name = ""
     st.session_state.video_title = "" 
     st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "comment_count": "-", "collect_count": "-", "repost_count": "-"}
+    # 🌟 翻译结果本地缓存池
+    st.session_state.translation_cache = {} 
+    st.session_state.title_cache = {}
 
-# 侧边栏登出
 st.sidebar.markdown(f"**👤 当前登录：{st.session_state.current_user}**")
 if st.sidebar.button("🚪 退出当前登录"):
     st.session_state.authenticated = False
@@ -372,6 +386,8 @@ if not st.session_state.processed:
                     res, lang = transcribe_any_audio(st.session_state.video_path, status_box)
                     st.session_state.raw_results = res
                     st.session_state.detected_lang = lang
+                    st.session_state.translation_cache = {} # 清空旧缓存
+                    st.session_state.title_cache = {}
                     
                     st.session_state.processed = True
                     status_box.empty()
@@ -407,6 +423,8 @@ if not st.session_state.processed:
                     res, lang = transcribe_any_audio(saved_path, status_box)
                     st.session_state.raw_results = res
                     st.session_state.detected_lang = lang
+                    st.session_state.translation_cache = {}
+                    st.session_state.title_cache = {}
                     
                     st.session_state.processed = True
                     status_box.empty()
@@ -428,12 +446,13 @@ else:
         st.session_state.audio_path = ""
         st.session_state.raw_results = []
         st.session_state.video_title = ""
+        st.session_state.translation_cache = {}
+        st.session_state.title_cache = {}
         st.session_state.video_metrics = {"upload_date": "-", "view_count": "-", "like_count": "-", "comment_count": "-", "collect_count": "-", "repost_count": "-"}
         st.rerun()
 
     st.markdown("---")
     
-    # 语言与模式选择配置
     lang_config = {
         "简体中文": {"deepl": "zh", "google": "chinese (simplified)"},
         "English (United States)": {"deepl": "en", "google": "english"},
@@ -455,35 +474,26 @@ else:
     with top_col3: 
         is_bilingual = st.toggle("双语对照", value=True)
         
-    full_text_to_copy = ""
+    # 🌟 极速读取与智能缓存逻辑
+    cache_key = f"{target_lang_name}"
     
-    try:
-        translator = DeeplTranslator(source='auto', target=deepl_code, use_free_api=True)
-    except:
-        translator = GoogleTranslator(source='auto', target=google_code)
+    if cache_key not in st.session_state.translation_cache:
+        raw_texts = [item["raw_text"] for item in st.session_state.raw_results]
+        with st.spinner(f"正在首次翻译为 {target_lang_name}..."):
+            trans_results = translate_text_list(raw_texts, deepl_code, google_code, st.session_state.detected_lang)
+            st.session_state.translation_cache[cache_key] = trans_results
+            
+            if final_full_title:
+                t_title = translate_text_list([final_full_title], deepl_code, google_code, st.session_state.detected_lang)[0]
+                st.session_state.title_cache[cache_key] = t_title
 
-    translated_video_title = ""
-    if final_full_title:
-        try:
-            translated_video_title = translator.translate(final_full_title)
-        except:
-            translated_video_title = "[标题翻译超时]"
+    cached_trans = st.session_state.translation_cache[cache_key]
+    translated_video_title = st.session_state.title_cache.get(cache_key, "")
 
     rendered_subtitles = []
-    for item in st.session_state.raw_results:
-        current_raw_lang = st.session_state.detected_lang.lower()
-        
-        if deepl_code.split('-')[0] == current_raw_lang:
-            t_text = ""
-        else:
-            if item["raw_text"]:
-                try:
-                    t_text = translator.translate(item["raw_text"])
-                except:
-                    t_text = "[翻译超时，请稍后重试]"
-            else:
-                t_text = ""
-            
+    full_text_to_copy = ""
+    for idx, item in enumerate(st.session_state.raw_results):
+        t_text = cached_trans[idx]
         rendered_subnotes = {
             "raw": item["raw_text"], 
             "trans": t_text, 
@@ -504,7 +514,7 @@ else:
             st.caption("✨ 点击代码块右上角即可一键秒拷：")
             st.code(full_text_to_copy, language="text")
 
-    # 头部展示：显示基础数据和原标题
+    # 头部展示
     m = st.session_state.video_metrics
     st.markdown(f"""
     <div style="font-size: 14px; font-weight: bold; color: #333333; margin-bottom: 8px;">📅 发布时间：{m['upload_date']}</div>
@@ -525,16 +535,15 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-    # 核心播放与实时字幕高亮区
+    # 核心播放区
     if st.session_state.video_path and os.path.exists(st.session_state.video_path):
         with open(st.session_state.video_path, "rb") as vf:
             video_bytes = vf.read()
         
-        # 渲染毫秒级同步的高亮播放组件
         player_html = render_sync_subtitle_player(video_bytes, rendered_subtitles, is_bilingual)
         st.components.v1.html(player_html, height=520)
 
-    # 底部资产导出按钮区
+    # 底部资产导出区
     st.markdown("---")
     st.markdown("**💾 资产一键导出**")
     ex_col1, ex_col2, ex_col3 = st.columns(3)
