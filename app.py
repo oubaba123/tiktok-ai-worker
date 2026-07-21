@@ -116,18 +116,6 @@ def format_date_str(date_str):
     except:
         return date_str
 
-# 离散时间切片转秒数辅助函数
-def time_str_to_seconds(time_str):
-    try:
-        parts = time_str.split(":")
-        if len(parts) == 2:
-            return int(parts[0]) * 60 + int(parts[1])
-        elif len(parts) == 3:
-            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
-    except:
-        return 0
-    return 0
-
 # 防断流多线程自适应链接下载函数
 def download_tk_video(video_url, status_text):
     status_text.text("正在智能解析本地网络代理环境...")
@@ -200,22 +188,24 @@ def transcribe_any_audio(file_path, status_text):
             "index": i,
             "start": format_short_time(segment.start),
             "end": format_short_time(segment.end),
-            "start_sec": segment.start,
-            "end_sec": segment.end,
+            "start_sec": float(segment.start),
+            "end_sec": float(segment.end),
             "raw_text": segment.text.strip()
         })
     return results, detected_lang
 
-# ================= 🌟 JS/HTML 播放器与实时高亮组件 =================
+# ================= 🌟 修复版 JS/HTML 播放器组件 =================
 def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
     import base64
     video_b64 = base64.b64encode(video_bytes).decode('utf-8')
     subtitles_json = json.dumps(subtitles_data)
+    is_bi_js = "true" if is_bilingual else "false"
     
     html_code = f"""
     <!DOCTYPE html>
     <html>
     <head>
+    <meta charset="utf-8">
     <style>
         body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin:0; padding:0; background:#fff; }}
         .player-layout {{ display: flex; gap: 16px; height: 500px; }}
@@ -227,8 +217,8 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
         /* 高亮样式 */
         .sub-item.active {{ background-color: #fff0f6; border-left-color: #ff007f; }}
         .sub-time {{ font-size: 12px; color: #888; font-family: monospace; margin-bottom: 2px; }}
-        .sub-en {{ font-size: 15px; color: #111; font-weight: 500; }}
-        .sub-zh {{ font-size: 13px; color: #666; margin-top: 2px; }}
+        .sub-en {{ font-size: 15px; color: #111; font-weight: 500; word-break: break-word; }}
+        .sub-zh {{ font-size: 13px; color: #666; margin-top: 2px; word-break: break-word; }}
     </style>
     </head>
     <body>
@@ -243,11 +233,11 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
 
     <script>
         const subs = {subtitles_json};
-        const isBi = {str(is_bilingual).lower()};
+        const isBi = {is_bi_js};
         const video = document.getElementById('myVideo');
         const container = document.getElementById('subContainer');
 
-        // 渲染字幕列表
+        // 🌟 修复渲染逻辑：严格强类型防御，防止关闭双语时卡死
         subs.forEach((sub, index) => {{
             const item = document.createElement('div');
             item.className = 'sub-item';
@@ -255,11 +245,18 @@ def render_sync_subtitle_player(video_bytes, subtitles_data, is_bilingual):
             item.onclick = () => {{ video.currentTime = sub.start_sec; video.play(); }};
             
             let html = `<div class="sub-time">${{sub.start}} - ${{sub.end}}</div>`;
+            const rawText = sub.raw || "";
+            const transText = sub.trans || "";
+
             if (isBi) {{
-                html += `<div class="sub-en">${{sub.raw}}</div>`;
-                if(sub.trans) html += `<div class="sub-zh">${{sub.trans}}</div>`;
+                html += `<div class="sub-en">${{rawText}}</div>`;
+                if (transText) {{
+                    html += `<div class="sub-zh">${{transText}}</div>`;
+                }}
             }} else {{
-                html += `<div class="sub-en">${{sub.trans || sub.raw}}</div>`;
+                // 关闭双语时优先显示译文，若无译文则降级显示原文
+                const showText = transText !== "" ? transText : rawText;
+                html += `<div class="sub-en">${{showText}}</div>`;
             }}
             item.innerHTML = html;
             container.appendChild(item);
@@ -507,7 +504,7 @@ else:
             st.caption("✨ 点击代码块右上角即可一键秒拷：")
             st.code(full_text_to_copy, language="text")
 
-    # 🌟 头部展示：显示基础数据和原标题
+    # 头部展示：显示基础数据和原标题
     m = st.session_state.video_metrics
     st.markdown(f"""
     <div style="font-size: 14px; font-weight: bold; color: #333333; margin-bottom: 8px;">📅 发布时间：{m['upload_date']}</div>
@@ -528,7 +525,7 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-    # 🌟 核心播放与实时字幕高亮区
+    # 核心播放与实时字幕高亮区
     if st.session_state.video_path and os.path.exists(st.session_state.video_path):
         with open(st.session_state.video_path, "rb") as vf:
             video_bytes = vf.read()
